@@ -1,32 +1,65 @@
-from openai import OpenAI
-from config import OPENAI_API_KEY
+import re
+from config import GOOGLE_API_KEY, FREE_MODE
+import logging
+try:
+    import google.generativeai as genai
+    genai.configure(api_key=GOOGLE_API_KEY)
+    GEMINI_AVAILABLE = True
+except Exception as e:
+    GEMINI_AVAILABLE = False
+    logging.warning("Gemini SDK not available: %s", e)
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Helpers
+def clean_text(html_or_text):
+    text = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', html_or_text)).strip()
+    return text
 
-def summarize_text(title, content):
-    prompt = f"""
-    క్రింద ఇచ్చిన వార్తను 250–300 తెలుగు అక్షరాలలో సూపర్ క్లియర్‌గా, పాయింట్‌కు వచ్చేలా 
-    షార్ట్ న్యూస్‌గా రాయండి. Clickbait వద్దు. రాజకీయ బయ్యాస్ లేకూడదు.
-    
-    శీర్షిక: {title}
+# Decide if we should call AI (hybrid policy)
+def needs_ai(full_text):
+    # cheap rules: if very short, or looks like bullet list -> no AI
+    if not full_text:
+        return False
+    tlen = len(full_text)
+    # if under 220 chars -> do cheap truncation (no AI)
+    if tlen < 220:
+        return False
+    # otherwise use AI for higher quality
+    return True
 
-    కంటెంట్:
-    {content}
-    """
+# Prompt template (Telugu, strict length)
+PROMPT = """
+మీ పని: క్రింద ఇచ్చిన వార్తని 250–300 తెలుగు అక్షరాలలో స్పష్టంగా, న్యూట్రల్ టోన్‌లో, క్లియర్ పాయింట్లుగా రాయండి. టెక్స్ట్ clickbait లాంటిది కాకూడదు. వార్త శీర్షిక మరియు మూలో తర్వాత ఒక వాక్యం లో "Source:" లింక్ చూపించవద్దు — లింక్ API ఎలిమెంటుగా వేరుగా ఉండాలి.
+Title: {title}
 
+Content:
+{content}
+
+నీ సమాధానం కేవలం summary మాత్రమె — 250 నుంచి 300 అక్షరాలు మాత్రమే.
+"""
+
+def gemini_summarize(title, content, model="gemini-1.5-flash"):
+    if FREE_MODE:
+        # debug fallback: cheap truncate
+        txt = (title + " " + (content or ""))[:300]
+        return txt
+    if not GEMINI_AVAILABLE:
+        # graceful fallback
+        txt = (title + " " + (content or ""))[:300]
+        return txt
+
+    cleaned = clean_text(content or "")
+    prompt = PROMPT.format(title=title, content=cleaned[:3000])  # limit input
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=120
-        )
-        return response.choices[0].message["content"].strip()
-
-    except Exception:
-        # fallback to GPT-4o
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=130
-        )
-        return response.choices[0].message["content"].strip()
+        # Use generate_text; docs show generate endpoints — this is conservative example
+        resp = genai.generate_text(model=model, input=prompt, max_output_tokens=200)
+        out = resp.text if hasattr(resp, "text") else str(resp)
+        out = out.strip()
+        # ensure size
+        if len(out) > 330:
+            out = out[:330].rsplit(" ",1)[0] + "…"
+        return out
+    except Exception as e:
+        logging.exception("Gemini call failed: %s", e)
+        # fallback truncate
+        txt = (title + " " + cleaned)[:300]
+        return txt
