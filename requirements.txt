@@ -5,3 +5,4 @@ feedparser
 requests
 python-dotenv
 openai
+google-ai-generative==0.3.0
