@@ -6,43 +6,48 @@ from datetime import datetime
 from typing import List
 
 import feedparser
-import requests
 from fastapi import FastAPI, Request, HTTPException
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-# load local .env if present (helps local testing)
 load_dotenv()
-
-# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("short-news-api")
 
-# Environment variables (must exist in Render)
+# Environment
 MONGO_URL = os.getenv("MONGO_URL")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
-ADMIN_SECRET = os.getenv("ADMIN_SECRET") or os.getenv("X_ADMIN_SECRET") or os.getenv("API_ADMIN_SECRET")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-RSS_FEEDS = os.getenv("RSS_FEEDS", "")  # comma separated list of feed URLs
-MAX_ITEMS_PER_FEED = int(os.getenv("MAX_ITEMS_PER_FEED", "5"))
+RSS_FEEDS = os.getenv("RSS_FEEDS", "")
+MAX_ITEMS_PER_FEED = int(os.getenv("MAX_ITEMS_PER_FEED", "3"))
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash-lite")
 USER_AGENT = os.getenv("FETCH_USER_AGENT", "Mozilla/5.0 (X11; Linux x86_64)")
 
-# Validate critical env
 if not MONGO_URL:
-    logger.warning("MONGO_URL not set in environment — DB operations will fail.")
+    logger.warning("MONGO_URL not set - DB operations will fail.")
 if not GOOGLE_API_KEY:
-    logger.warning("GOOGLE_API_KEY not set in environment — Gemini calls will fail.")
+    logger.warning("GOOGLE_API_KEY not set - Gemini calls will fail.")
+if not RSS_FEEDS:
+    logger.warning("RSS_FEEDS not set - update will error without feeds.")
 
-# Mongo client
-client = MongoClient(MONGO_URL) if MONGO_URL else None
-db = client[MONGO_DB_NAME] if client else None
+# Mongo connection
+client = None
+db = None
+videos_col = None
+errors_col = None
+try:
+    if MONGO_URL:
+        client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=10000)
+        db = client[MONGO_DB_NAME]
+        videos_col = db["videos"]
+        errors_col = db["errors"]
+        client.admin.command("ping")
+        logger.info("MongoDB connected")
+except Exception as e:
+    logger.exception("MongoDB connect failed: %s", str(e))
 
-# Preserve exact collection names required by user
-videos_col = db["videos"] if db else None
-errors_col = db["errors"] if db else None
-
-# Import gemini wrapper (the REST wrapper file we added)
+# Use our REST gemini wrapper
 from gemini_client import summarize_text
 
 app = FastAPI(title="Short News API")
@@ -51,19 +56,38 @@ app = FastAPI(title="Short News API")
 def status():
     return {"status": "Short News API Running", "timestamp": datetime.utcnow().isoformat()}
 
+# Debug helpers
+@app.get("/debug/ping_db")
+def ping_db():
+    try:
+        if not client:
+            return {"ok": False, "error": "Mongo client not configured"}
+        info = client.server_info()
+        return {"ok": True, "version": info.get("version")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@app.get("/debug/check_feed")
+def check_feed():
+    feeds = [f.strip() for f in RSS_FEEDS.split(",") if f.strip()]
+    if not feeds:
+        return {"ok": False, "error": "RSS_FEEDS empty"}
+    sample = feeds[0]
+    items = fetch_feed(sample, max_items=1)
+    return {"ok": True, "feed": sample, "found": len(items), "item": items[0] if items else None}
+
 def fetch_feed(url: str, max_items: int = 5) -> List[dict]:
-    headers = {"User-Agent": USER_AGENT}
     try:
         parsed = feedparser.parse(url, agent=USER_AGENT)
-        items = []
         entries = parsed.entries or []
+        items = []
         for e in entries[:max_items]:
             item = {
-                "title": e.get("title", "").strip(),
-                "link": e.get("link", "").strip(),
-                "published": e.get("published", "") or e.get("updated", ""),
-                "summary": (e.get("summary") or e.get("description") or "").strip(),
-                "content": (e.get("content")[0].get("value") if e.get("content") else "") if isinstance(e.get("content"), list) else (e.get("content") or ""),
+                "title": e.get("title","").strip(),
+                "link": e.get("link","").strip(),
+                "published": e.get("published",""),
+                "summary": (e.get("summary") or "").strip(),
+                "content": (e.get("content")[0].get("value") if e.get("content") else "") if isinstance(e.get("content"), list) else (e.get("content") or "")
             }
             items.append(item)
         return items
@@ -83,7 +107,6 @@ def get_news(limit: int = 10):
     if not videos_col:
         raise HTTPException(status_code=500, detail="Database not configured")
     docs = list(videos_col.find().sort("created_at", -1).limit(limit))
-    # convert ObjectId and datetime to serializable
     for d in docs:
         d["_id"] = str(d.get("_id"))
         if isinstance(d.get("created_at"), datetime):
@@ -92,13 +115,12 @@ def get_news(limit: int = 10):
 
 @app.get("/update")
 def update(request: Request):
-    # auth via header X-Admin-Secret
     header_secret = request.headers.get("X-Admin-Secret")
     if not ADMIN_SECRET:
         logger.error("ADMIN_SECRET not configured in environment")
         raise HTTPException(status_code=500, detail="Admin secret not configured")
     if header_secret != ADMIN_SECRET:
-        logger.warning("Unauthorized update attempt: header_secret mismatch")
+        logger.warning("Unauthorized update attempt")
         raise HTTPException(status_code=403, detail="Forbidden")
 
     feeds = [f.strip() for f in RSS_FEEDS.split(",") if f.strip()]
@@ -126,11 +148,10 @@ def update(request: Request):
             title = item.get("title") or ""
             content = item.get("content") or item.get("summary") or ""
 
-            # Safety: trim long content for cost control
+            # Trim long content
             if len(content) > 5000:
                 content = content[:5000]
 
-            # Summarize with Gemini (via REST wrapper)
             try:
                 summary = summarize_text(title=title, content=content, model=GEMINI_MODEL, max_output_tokens=120)
                 logger.info("Summary length: %d", len(summary or ""))
@@ -164,7 +185,6 @@ def update(request: Request):
                     errors_col.insert_one({"type":"mongo_insert", "link": link, "error": str(exc), "ts": datetime.utcnow()})
                 errors.append({"link": link, "error": str(exc)})
 
-            # small delay to avoid bursting API
             time.sleep(0.25)
 
     return {"status":"updated", "timestamp": datetime.utcnow().isoformat(), "inserted": inserted_count, "errors": errors}
