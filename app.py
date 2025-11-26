@@ -37,15 +37,21 @@ db = None
 videos_col = None
 errors_col = None
 try:
-    if MONGO_URL:
+    if MONGO_URL is not None:
         client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=10000)
         db = client[MONGO_DB_NAME]
-        videos_col = db["videos"]
-        errors_col = db["errors"]
+        # IMPORTANT: don't use "if db" – compare with None
+        if db is not None:
+            videos_col = db["videos"]
+            errors_col = db["errors"]
         client.admin.command("ping")
         logger.info("MongoDB connected")
 except Exception as e:
     logger.exception("MongoDB connect failed: %s", str(e))
+    client = None
+    db = None
+    videos_col = None
+    errors_col = None
 
 # Use our REST gemini wrapper
 from gemini_client import summarize_text
@@ -60,7 +66,7 @@ def status():
 @app.get("/debug/ping_db")
 def ping_db():
     try:
-        if not client:
+        if client is None:
             return {"ok": False, "error": "Mongo client not configured"}
         info = client.server_info()
         return {"ok": True, "version": info.get("version")}
@@ -93,18 +99,18 @@ def fetch_feed(url: str, max_items: int = 5) -> List[dict]:
         return items
     except Exception as exc:
         logger.exception("Feed fetch failed for %s: %s", url, str(exc))
-        if errors_col:
+        if errors_col is not None:
             errors_col.insert_one({"type":"feed_fetch", "url": url, "error": str(exc), "ts": datetime.utcnow()})
         return []
 
 def already_exists(link: str) -> bool:
-    if not videos_col:
+    if videos_col is None:
         return False
     return videos_col.find_one({"link": link}) is not None
 
 @app.get("/news")
 def get_news(limit: int = 10):
-    if not videos_col:
+    if videos_col is None:
         raise HTTPException(status_code=500, detail="Database not configured")
     docs = list(videos_col.find().sort("created_at", -1).limit(limit))
     for d in docs:
@@ -116,7 +122,7 @@ def get_news(limit: int = 10):
 @app.get("/update")
 def update(request: Request):
     header_secret = request.headers.get("X-Admin-Secret")
-    if not ADMIN_SECRET:
+    if ADMIN_SECRET is None:
         logger.error("ADMIN_SECRET not configured in environment")
         raise HTTPException(status_code=500, detail="Admin secret not configured")
     if header_secret != ADMIN_SECRET:
@@ -148,7 +154,6 @@ def update(request: Request):
             title = item.get("title") or ""
             content = item.get("content") or item.get("summary") or ""
 
-            # Trim long content
             if len(content) > 5000:
                 content = content[:5000]
 
@@ -157,7 +162,7 @@ def update(request: Request):
                 logger.info("Summary length: %d", len(summary or ""))
             except Exception as exc:
                 logger.exception("Gemini summarize failed for %s: %s", link, str(exc))
-                if errors_col:
+                if errors_col is not None:
                     errors_col.insert_one({"type":"gemini", "link": link, "error": str(exc), "ts": datetime.utcnow()})
                 summary = ""
 
@@ -172,7 +177,7 @@ def update(request: Request):
             }
 
             try:
-                if videos_col:
+                if videos_col is not None:
                     videos_col.insert_one(doc)
                     inserted_count += 1
                     logger.info("Inserted: %s", link)
@@ -181,10 +186,15 @@ def update(request: Request):
                     errors.append({"link": link, "error": "db not configured"})
             except Exception as exc:
                 logger.exception("Mongo insert failed for %s: %s", link, str(exc))
-                if errors_col:
+                if errors_col is not None:
                     errors_col.insert_one({"type":"mongo_insert", "link": link, "error": str(exc), "ts": datetime.utcnow()})
                 errors.append({"link": link, "error": str(exc)})
 
             time.sleep(0.25)
 
-    return {"status":"updated", "timestamp": datetime.utcnow().isoformat(), "inserted": inserted_count, "errors": errors}
+    return {
+        "status": "updated",
+        "timestamp": datetime.utcnow().isoformat(),
+        "inserted": inserted_count,
+        "errors": errors,
+    }
