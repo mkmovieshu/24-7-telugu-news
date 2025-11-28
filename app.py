@@ -5,10 +5,11 @@ import logging
 from datetime import datetime
 from typing import List
 
-import feedparser
-from fastapi import FastAPI, Request, HTTPException
-from pymongo import MongoClient
-from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+# ...నీ ఇతర imports 그대로...
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
