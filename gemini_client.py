@@ -1,134 +1,85 @@
 import logging
-import re
 from typing import Optional
 
 import requests
 
-# NOTE: config.py exposes GOOGLE_API_KEY and GEMINI_MODEL.
-from config import GOOGLE_API_KEY, GEMINI_MODEL
+from config import GEMINI_API_KEY, GEMINI_MODEL
 
-logger = logging.getLogger("short-news-api")
+log = logging.getLogger("short-news-api")
 
-
-def _keep_telugu_only(text: str) -> str:
-    """
-    Summaryలో ఉన్న English letters, symbols వగైరా తీసేసి
-    తెలుగు + basic punctuation మాత్రమే ఉంచుతుంది.
-    """
-    if not text:
-        return ""
-
-    # తెలుగు unicode range: \u0C00-\u0C7F
-    # digits + basic punctuation కూడా allow చేస్తున్నాం
-    cleaned = re.sub(
-        r"[^0-9\u0C00-\u0C7F\s\.\,\?\!\-\:\;\"\'\(\)]",
-        " ",
-        text,
-    )
-
-    # ఎక్కువ spaces/newlines ని normalize చేయడం
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned
+GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 def summarize_text(
     title: str,
     content: str,
     model: Optional[str] = None,
-    max_output_tokens: int = 140,
-) -> Optional[str]:
+    max_output_tokens: int = 160,
+) -> str:
     """
-    Gemini‌తో తెలుగు short summary తీసుకొచ్చే helper.
-
-    - Output pure Telugu కావాలి (English words లేకుండా).
-    - 2–3 sentences max.
+    Call Gemini API and return Telugu short summary.
+    If anything fails, return empty string so update() still works.
     """
-    api_key = GOOGLE_API_KEY
-    if not api_key:
-        logger.warning("Gemini API key (GOOGLE_API_KEY) not set; skipping summarization")
-        return None
-
+    api_key = GEMINI_API_KEY
     model_name = model or GEMINI_MODEL
-    url = (
-        f"https://generativelanguage.googleapis.com/v1/models/"
-        f"{model_name}:generateContent?key={api_key}"
+
+    if not api_key:
+        log.warning("Gemini API key not configured, skipping summarize.")
+        return ""
+
+    url = f"{GEMINI_ENDPOINT}/{model_name}:generateContent?key={api_key}"
+
+    system_prompt = (
+        "నువ్వు Telugu short news editor. "
+        "ఇచ్చిన title, content చూసి, క్లియర్‌గా, చదవడానికి కంఫర్ట్‌గా ఉండే "
+        "సింగిల్ ప్యారాగ్రాఫ్‌లో తెలుగు సమరీ రాయాలి. "
+        "ఇంగ్లీష్ words అవసరమైనప్పుడే ఉపయోగించు; possible అయితే pure తెలుగు లో రాయాలి. "
+        "కొత్త sensational సమాచారం ఊహించి create చేయకూడదు. "
+        "3–4 lines వరకూ natural length summary ఇవ్వాలి."
     )
 
-    # PROMPT: pure Telugu summary only
-    prompt = (
-        "క్రింద ఇచ్చిన తెలుగు వార్తను చాలా చిన్న సమరీగా మార్చండి.\n"
-        "RULES:\n"
-        "1. సమరీ పూర్తిగా తెలుగు లోనే ఉండాలి.\n"
-        "2. English words, English sentences, transliteration (ఉదా: 'job mela', "
-        "'Chief Minister', 'AP Skill Development Corporation') వాడకండి.\n"
-        "3. 2 లేదా 3 వాక్యాలు, గరిష్టం 4 వాక్యాలు దాటకూడదు.\n"
-        "4. బులెట్ పాయింట్లు, హ్యాష్‌ట్యాగ్లు, emojis, quotes పెట్టకండి.\n"
-        "5. WhatsApp status లా natural conversational తెలుగు లో రాయండి.\n\n"
-        f"శీర్షిక: {title}\n\n"
-        "వార్త మొత్తం:\n"
-        f"{content}\n\n"
-        "ఇప్పుడు పైన ఉన్న సమాచారాన్ని బట్టి చివరి output గా **చిన్న తెలుగు సమరీ** మాత్రమే రాయండి."
-    )
-
-    body = {
+    payload = {
         "contents": [
             {
-                "role": "user",
                 "parts": [
+                    {"text": system_prompt},
                     {
-                        "text": prompt,
-                    }
-                ],
+                        "text": (
+                            f"TITLE:\n{title}\n\n"
+                            f"CONTENT:\n{content}\n\n"
+                            "OUTPUT:\nతెలుగులో మాత్రమే short summary రాయండి."
+                        )
+                    },
+                ]
             }
         ],
         "generationConfig": {
-            "temperature": 0.6,
-            "topP": 0.9,
+            "temperature": 0.3,
+            "topP": 0.8,
             "topK": 40,
             "maxOutputTokens": max_output_tokens,
         },
     }
 
     try:
-        resp = requests.post(url, json=body, timeout=25)
-    except Exception as e:
-        logger.exception("Gemini summarize request failed: %s", e)
-        return None
+        resp = requests.post(url, json=payload, timeout=20)
+        log.info("Gemini status: %s", resp.status_code)
+        resp.raise_for_status()
+        data = resp.json()
 
-    logger.info("Gemini status: %s", resp.status_code)
-
-    if resp.status_code != 200:
-        try:
-            text_preview = resp.text[:400]
-        except Exception:
-            text_preview = "<unreadable>"
-        logger.error(
-            "Gemini summarize failed (status %s): %s",
-            resp.status_code,
-            text_preview,
+        parts = (
+            data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [])
         )
-        return None
+        summary = "".join(p.get("text", "") for p in parts).strip()
+        if not summary:
+            return ""
 
-    data = resp.json()
-    logger.info("Gemini raw response (trimmed): %s", str(data)[:400])
-
-    try:
-        raw_summary = (
-            data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        )
-    except (KeyError, IndexError, TypeError) as e:
-        logger.error("Unexpected Gemini response format: %s (%s)", data, e)
-        return None
-
-    telugu_only = _keep_telugu_only(raw_summary)
-
-    # clean చేసిన తర్వాత text ఖాళీ అయ్యితే raw summary fallback
-    final_summary = telugu_only or raw_summary.strip()
-
-    logger.info(
-        "Gemini summary lengths: raw=%d, telugu_only=%d",
-        len(raw_summary),
-        len(final_summary),
-    )
-
-    return final_summary
+        # normalize whitespace
+        summary = " ".join(summary.split())
+        log.info("Gemini summary length: %d", len(summary))
+        return summary
+    except Exception as exc:
+        log.error("Gemini summarize failed: %s", exc, exc_info=True)
+        return ""
