@@ -198,3 +198,13 @@ def update(request: Request):
         "inserted": inserted_count,
         "errors": errors,
     }
+    from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Serve static folder
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Route for UI
+@app.get("/app")
+def serve_ui():
+    return FileResponse("static/app.html")
