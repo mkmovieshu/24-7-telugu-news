@@ -1,244 +1,189 @@
 import os
-import time
-import re
 import logging
+import re
 from datetime import datetime
-from typing import List
-
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-
-from dotenv import load_dotenv
-import feedparser
 from pymongo import MongoClient
+import feedparser
+
+from config import (
+    MONGO_URL,
+    MONGO_DB_NAME,
+    RSS_FEEDS,
+    ADMIN_SECRET,
+    GOOGLE_API_KEY,
+    GEMINI_MODEL,
+)
 
 from gemini_client import summarize_text
 
-# --- Load .env ---
-load_dotenv()
 
+# -----------------------------------------------------------------------------
+# LOGGING
+# -----------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("short-news-api")
-
-# === ENVIRONMENT (DON'T RENAME THESE KEYS) ===
-MONGO_URL = os.getenv("MONGO_URL")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
-ADMIN_SECRET = os.getenv("ADMIN_SECRET")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-RSS_FEEDS = os.getenv(
-    "RSS_FEEDS",
-    "https://telugu.oneindia.com/rss/feeds/oneindia-telugu-fb.xml"
-)
-MAX_ITEMS_PER_FEED = int(os.getenv("MAX_ITEMS_PER_FEED", "3"))
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash-lite")
-USER_AGENT = os.getenv("FETCH_USER_AGENT", "Mozilla/5.0")
-
-# === MongoDB CONNECTION ===
-client = None
-db = None
-videos_col = None
-errors_col = None
-try:
-    if MONGO_URL:
-        client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=10000)
-        db = client[MONGO_DB_NAME]
-        videos_col = db["videos"]
-        errors_col = db["errors"]
-        client.admin.command("ping")
-        logger.info("MongoDB connected")
-    else:
-        logger.warning("MONGO_URL not set")
-except Exception as e:
-    logger.exception("MongoDB connect failed: %s", str(e))
+log = logging.getLogger("short-news-api")
 
 
-# === HELPERS ===
+# -----------------------------------------------------------------------------
+# DB INIT
+# -----------------------------------------------------------------------------
+client = MongoClient(MONGO_URL)
+db = client[MONGO_DB_NAME]
+news_col = db["news"]
 
-def _fetch_feed(url: str, max_items: int = 5) -> List[dict]:
-    parsed = feedparser.parse(url, agent=USER_AGENT)
-    entries = parsed.entries or []
-    items = []
-    for e in entries[:max_items]:
-        items.append(
-            {
-                "title": e.get("title", "").strip(),
-                "link": e.get("link", "").strip(),
-                "published": e.get("published", ""),
-                "summary": e.get("summary", "").strip(),
-                "content": (e.get("content")[0].value if e.get("content") else ""),
-            }
-        )
-    return items
+log.info("MongoDB connected")
 
 
-def _already_exists(link: str) -> bool:
-    if not videos_col:
-        return False
-    return videos_col.find_one({"link": link}) is not None
-
-
-def _clean_telugu_summary(text: str) -> str:
+# -----------------------------------------------------------------------------
+# SMART SUMMARY CLEANER (Stage-3)
+# -----------------------------------------------------------------------------
+def smart_clean_summary(text: str) -> str:
     """
-    summary లో ఉన్న English letters & ఇతర symbols తొలగించి
-    తెలుగు + digits + basic punctuation మాత్రమే ఉంచుతుంది.
+    Telugu-focused cleaner:
+    - Keep Telugu fully
+    - Keep meaningful English (AP, ED, CBI, Rapido, Skill Development…)
+    - Remove useless English sentences
+    - Remove long English lines
     """
-    if not isinstance(text, str) or not text:
+    if not isinstance(text, str) or not text.strip():
         return ""
 
-    # తెలుగు unicode: \u0C00-\u0C7F
-    cleaned = re.sub(
-        r"[^0-9\u0C00-\u0C7F\s\.\,\?\!\-\:\;\"\'\(\)]",
-        " ",
-        text,
-    )
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned
+    # 1. Break by sentences
+    parts = re.split(r'([.!?])', text)
+    sentences = ["".join(parts[i:i+2]).strip()
+                 for i in range(0, len(parts), 2)]
+
+    cleaned = []
+
+    for s in sentences:
+
+        # Telugu exists → keep
+        if re.search(r'[\u0C00-\u0C7F]', s):
+            cleaned.append(s)
+            continue
+
+        # Long English sentence → remove
+        if len(s.split()) > 4:
+            continue
+
+        # Short proper English words allowed
+        if re.match(r'^[A-Za-z0-9\-\(\) ]{1,30}$', s):
+            cleaned.append(s)
+            continue
+
+    result = " ".join(cleaned)
+    result = re.sub(r"\s+", " ", result).strip()
+
+    return result
 
 
-# === FASTAPI APP ===
+# -----------------------------------------------------------------------------
+# FASTAPI APP
+# -----------------------------------------------------------------------------
+app = FastAPI(title="Short News API", version="3.0")
 
-app = FastAPI(title="Short News API")
-
+# CORS for UI app
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# === ROUTES ===
-
-@app.get("/")
-def status():
-    return {
-        "status": "Short News API Running",
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-@app.get("/debug/ping_db")
-def ping_db():
-    if not client:
-        return {"ok": False, "error": "client not configured"}
-    try:
-        info = client.server_info()
-        return {"ok": True, "version": info.get("version")}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+# -----------------------------------------------------------------------------
+# INDEX ROUTE (UI)
+# -----------------------------------------------------------------------------
+@app.get("/", response_class=HTMLResponse)
+def index():
+    with open("app.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 
-@app.get("/debug/check_feed")
-def check_feed():
-    feeds = [f.strip() for f in RSS_FEEDS.split(",") if f.strip()]
-    if not feeds:
-        return {"ok": False, "error": "RSS_FEEDS empty"}
-    url = feeds[0]
-    items = _fetch_feed(url, max_items=1)
-    return {
-        "ok": True,
-        "feed": url,
-        "found": len(items),
-        "item": items[0] if items else None,
-    }
-
-
-@app.get("/news")
-def get_news(limit: int = 10):
-    if not videos_col:
-        raise HTTPException(status_code=500, detail="DB not configured")
-
-    docs = list(videos_col.find().sort("created_at", -1).limit(limit))
-
-    for d in docs:
-        # stringify _id
-        d["_id"] = str(d["_id"])
-        # ISO format for created_at
-        if isinstance(d.get("created_at"), datetime):
-            d["created_at"] = d["created_at"].isoformat()
-        # CLEAN summary → Telugu only
-        if "summary" in d and isinstance(d["summary"], str):
-            d["summary"] = _clean_telugu_summary(d["summary"])
-
-    return docs
-
-
+# -----------------------------------------------------------------------------
+# /update  → Fetch RSS + Summaries + Store
+# -----------------------------------------------------------------------------
 @app.get("/update")
-def update(request: Request):
-    if request.headers.get("X-Admin-Secret") != ADMIN_SECRET:
-        raise HTTPException(status_code=403, detail="Forbidden")
+def update_news(x_admin_secret: str = Header(None)):
 
-    feeds = [f.strip() for f in RSS_FEEDS.split(",") if f.strip()]
-    if not feeds:
-        logger.warning("RSS_FEEDS not set - update will error without feeds.")
-        return {"status": "no_feeds", "inserted": 0, "errors": ["RSS_FEEDS empty"]}
+    if x_admin_secret != ADMIN_SECRET:
+        return {"error": "Invalid secret key"}
 
-    inserted = 0
+    inserted = []
     errors = []
 
-    for f in feeds:
-        logger.info("Fetching feed: %s", f)
-        items = _fetch_feed(f, max_items=MAX_ITEMS_PER_FEED)
-        logger.info("Found %d items in feed %s", len(items), f)
+    for feed_url in RSS_FEEDS:
+        log.info("Fetching feed: %s", feed_url)
+        data = feedparser.parse(feed_url)
 
-        for item in items:
-            link = item["link"]
-            if not link:
+        for entry in data.entries:
+            link = entry.link
+            title = entry.title
+            published = entry.get("published", "")
+            summary_raw = entry.get("summary", "")
+
+            if news_col.find_one({"link": link}):
                 continue
 
-            if _already_exists(link):
-                logger.info("Already exists — skip: %s", link)
-                continue
+            # Fetch full summary from Gemini
+            ai_summary = summarize_text(
+                title=title,
+                content=summary_raw,
+                model=GEMINI_MODEL,
+                max_output_tokens=180,
+            )
 
-            title = item["title"]
-            content = item["content"] or item["summary"]
-
-            summary = ""
-            try:
-                summary = summarize_text(
-                    title=title,
-                    content=content,
-                    model=GEMINI_MODEL,
-                    max_output_tokens=140,
-                )
-            except Exception as e:
-                logger.exception("Gemini summarize exception: %s", e)
-                errors.append(str(e))
-
-            # DBలో raw_summary English తో ఉన్నా పర్వాలేదు
+            # Store raw + clean version
             doc = {
                 "title": title,
                 "link": link,
-                "published": item["published"],
-                "summary": summary,
-                "source": f,
-                "raw_summary": item["summary"],
+                "published": published,
+                "raw_summary": summary_raw,
+                "summary": ai_summary,
+                "source": feed_url,
                 "created_at": datetime.utcnow(),
             }
 
-            if videos_col:
-                videos_col.insert_one(doc)
-                inserted += 1
-                logger.info("Inserted: %s", link)
-
-            time.sleep(0.25)
+            try:
+                news_col.insert_one(doc)
+                inserted.append(link)
+            except Exception as e:
+                log.error("Insert error: %s", e)
+                errors.append(str(e))
 
     return {
         "status": "updated",
         "timestamp": datetime.utcnow().isoformat(),
-        "inserted": inserted,
+        "inserted": len(inserted),
         "errors": errors,
     }
 
 
-# === STATIC UI (Stage 3) ===
+# -----------------------------------------------------------------------------
+# /news → Cleaned, Telugu-focused output for mobile UI
+# -----------------------------------------------------------------------------
+@app.get("/news")
+def get_news(limit: int = 10):
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+    docs = list(news_col.find().sort("created_at", -1).limit(limit))
 
+    final = []
+    for d in docs:
+        d["_id"] = str(d["_id"])
 
-@app.get("/app")
-def serve_app():
-    return FileResponse("static/app.html")
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+
+        # CLEAN HERE — Stage-3 magic
+        if "summary" in d and isinstance(d["summary"], str):
+            d["summary"] = smart_clean_summary(d["summary"])
+
+        final.append(d)
+
+    return final
