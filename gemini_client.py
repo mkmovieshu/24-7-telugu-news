@@ -1,11 +1,11 @@
 import logging
-import os
 import re
 from typing import Optional
 
 import requests
 
-from config import GEMINI_API_KEY, GEMINI_MODEL
+# NOTE: config.py exposes GOOGLE_API_KEY and GEMINI_MODEL.
+from config import GOOGLE_API_KEY, GEMINI_MODEL
 
 logger = logging.getLogger("short-news-api")
 
@@ -43,9 +43,9 @@ def summarize_text(
     - Output pure Telugu కావాలి (English words లేకుండా).
     - 2–3 sentences max.
     """
-    api_key = GEMINI_API_KEY
+    api_key = GOOGLE_API_KEY
     if not api_key:
-        logger.warning("Gemini API key not set; skipping summarization")
+        logger.warning("Gemini API key (GOOGLE_API_KEY) not set; skipping summarization")
         return None
 
     model_name = model or GEMINI_MODEL
@@ -58,16 +58,16 @@ def summarize_text(
     prompt = (
         "క్రింద ఇచ్చిన తెలుగు వార్తను చాలా చిన్న సమరీగా మార్చండి.\n"
         "RULES:\n"
-        "1. సమరీ పూర్తిగా **తెలుగు**లోనే ఉండాలి.\n"
-        "2. English words, English sentences, transliteration (e.g. 'job mela', "
+        "1. సమరీ పూర్తిగా తెలుగు లోనే ఉండాలి.\n"
+        "2. English words, English sentences, transliteration (ఉదా: 'job mela', "
         "'Chief Minister', 'AP Skill Development Corporation') వాడకండి.\n"
-        "3. 2 లేదా 3 వాక్యాలు ఎక్కువ అయితే 4 వాక్యాలు దాటకూడదు.\n"
+        "3. 2 లేదా 3 వాక్యాలు, గరిష్టం 4 వాక్యాలు దాటకూడదు.\n"
         "4. బులెట్ పాయింట్లు, హ్యాష్‌ట్యాగ్లు, emojis, quotes పెట్టకండి.\n"
         "5. WhatsApp status లా natural conversational తెలుగు లో రాయండి.\n\n"
         f"శీర్షిక: {title}\n\n"
         "వార్త మొత్తం:\n"
         f"{content}\n\n"
-        "ఇప్పుడు పైన ఉన్న సమాచారాన్ని బట్టి **చివరి output గా చిన్న తెలుగు సమరీ** మాత్రమే రాయండి."
+        "ఇప్పుడు పైన ఉన్న సమాచారాన్ని బట్టి చివరి output గా **చిన్న తెలుగు సమరీ** మాత్రమే రాయండి."
     )
 
     body = {
@@ -98,7 +98,6 @@ def summarize_text(
     logger.info("Gemini status: %s", resp.status_code)
 
     if resp.status_code != 200:
-        # దీన్ని logs లో చూసుకోవడానికి కొంచెం మాత్రమే print చేస్తాం
         try:
             text_preview = resp.text[:400]
         except Exception:
@@ -123,8 +122,7 @@ def summarize_text(
 
     telugu_only = _keep_telugu_only(raw_summary)
 
-    # ఎక్కడైనా clean చేసిన తర్వాత text పూర్తిగా ఖాళీ అయిపోతే,
-    # కనీసం raw summary అయినా వాడుకునేలా fallback
+    # clean చేసిన తర్వాత text ఖాళీ అయ్యితే raw summary fallback
     final_summary = telugu_only or raw_summary.strip()
 
     logger.info(
