@@ -7,6 +7,7 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 
 log = logging.getLogger("short-news-api")
 
+# Google Generative Language API endpoint
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
@@ -76,7 +77,7 @@ def summarize_text(
         if not summary:
             return ""
 
-        # normalize whitespace
+        # Normalize whitespace
         summary = " ".join(summary.split())
         log.info("Gemini summary length: %d", len(summary))
         return summary
