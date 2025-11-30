@@ -1,28 +1,38 @@
 import os
+import logging
 from dotenv import load_dotenv
 
-# Load .env locally; on Render, env panel values will override
+# Load .env if present (local dev), Koyeb/Render use real env vars
 load_dotenv()
 
-# === MongoDB ===
+log = logging.getLogger("short-news-api")
+
+# MongoDB
 MONGO_URL = os.getenv("MONGO_URL")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "news_db")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
 
-# === Admin auth ===
-ADMIN_SECRET = os.getenv("ADMIN_SECRET")
+if not MONGO_URL:
+    log.warning("MONGO_URL not set. Mongo connection will fail.")
 
-# === Gemini / Google Generative Language ===
-# OFFICIAL ENV VAR NAME – DON'T CHANGE
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# Admin secret (for /update)
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "9xV!pG72Qr3mK")
 
-# Python-side alias for backwards compatibility
-GEMINI_API_KEY = GOOGLE_API_KEY
+# RSS feeds (comma separated)
+_raw_feeds = os.getenv("RSS_FEEDS", "").strip()
+if _raw_feeds:
+    RSS_FEEDS = [u.strip() for u in _raw_feeds.split(",") if u.strip()]
+else:
+    RSS_FEEDS = []
 
-# Model to use for summaries
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash-lite")
+# Gemini / Google AI
+# IMPORTANT: we read GOOGLE_API_KEY from env,
+# but also expose it as GEMINI_API_KEY for old code.
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GEMINI_API_KEY = GOOGLE_API_KEY  # alias so old imports still work
 
-# === RSS feeds ===
-RSS_FEEDS = os.getenv(
-    "RSS_FEEDS",
-    "https://telugu.oneindia.com/rss/feeds/oneindia-telugu-fb.xml",
-).split(",")
+# Default model
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+
+# Optional log level
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+logging.getLogger().setLevel(LOG_LEVEL)
