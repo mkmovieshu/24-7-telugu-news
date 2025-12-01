@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="te">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>24/7 Telugu News</title>
+
+  <style>
+    /* ----- Global layout ----- */
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: #050505;
+      color: #ffffff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial,
+        sans-serif;
+      overflow: hidden;
+    }
+
+    .app-shell {
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    /* ----- News card ----- */
+    .news-card {
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 24px 20px 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 16px;
+
+      /* Glass card feel */
+      background: radial-gradient(circle at top, #222 0, #050505 55%);
+      color: #f9f9f9;
+
+      /* Rounded full-screen style */
+      border-radius: 0;
+
+      /* Animation base */
+      opacity: 1;
+      transform: translateY(0);
+      transition: transform 220ms ease-out, opacity 220ms ease-out;
+    }
+
+    .news-card-header {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .title {
+      font-size: 1.6rem;
+      line-height: 1.4;
+      font-weight: 700;
+      margin: 0 0 16px;
+      color: #ffffff;
+    }
+
+    .summary {
+      font-size: 1.02rem;
+      line-height: 1.7;
+      color: #e5e5e5;
+      margin: 0;
+    }
+
+    .source-line {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 6px;
+    }
+
+    /* ----- Button ----- */
+    .btn-row {
+      margin-top: 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .primary-btn {
+      width: 100%;
+      max-width: 420px;
+      border: none;
+      border-radius: 999px;
+      padding: 16px 20px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-align: center;
+      background: #ffc400;
+      color: #000;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+      transition: transform 120ms ease-out, box-shadow 120ms ease-out,
+        background 120ms ease-out;
+    }
+
+    .primary-btn:active {
+      transform: translateY(2px) scale(0.98);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+      background: #ffb300;
+    }
+
+    /* ----- Top info / index ----- */
+    .top-bar {
+      position: absolute;
+      top: 10px;
+      left: 0;
+      right: 0;
+      padding: 0 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: #aaa;
+      pointer-events: none;
+    }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+    }
+
+    /* ----- Swipe hint ----- */
+    .swipe-hint {
+      position: absolute;
+      bottom: 10px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 0.78rem;
+      color: #888;
+      opacity: 0.85;
+      pointer-events: none;
+    }
+
+    /* small arrows */
+    .swipe-hint .arrow {
+      display: inline-block;
+      margin: 0 4px;
+      font-size: 0.9rem;
+      opacity: 0.9;
+    }
+
+    /* ----- Animation helpers ----- */
+    .news-card.anim-enter-up-start {
+      opacity: 0;
+      transform: translateY(36px);
+    }
+
+    .news-card.anim-enter-down-start {
+      opacity: 0;
+      transform: translateY(-36px);
+    }
+
+    .news-card.anim-enter-up,
+    .news-card.anim-enter-down {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Optional: subtle parallax on hold / drag */
+    .news-card.dragging {
+      transition: none;
+    }
+
+    /* Make sure long text scrolls inside, not full page */
+    .scroll-area {
+      max-height: 70vh;
+      overflow: hidden;
+    }
+
+    @media (min-width: 720px) {
+      .news-card {
+        margin-top: 10px;
+        margin-bottom: 10px;
+        border-radius: 24px;
+      }
+
+      .swipe-hint {
+        bottom: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="news-card" id="newsCard">
+      <div class="top-bar">
+        <div class="badge" id="indexBadge">0 / 0</div>
+        <div class="badge">↑ కొత్త / ↓ ముందున్నది</div>
+      </div>
+
+      <div class="news-card-header scroll-area">
+        <h1 class="title" id="newsTitle">లోడింగ్...</h1>
+        <p class="summary" id="newsSummary">
+          దయచేసి కాసేపు ఆగండి, తాజా వార్తలు తెస్తున్నాం...
+        </p>
+        <p class="source-line" id="newsMeta"></p>
+      </div>
+
+      <div class="btn-row">
+        <button class="primary-btn" id="readMoreBtn">
+          పూర్తి వార్త చదవండి
+        </button>
+      </div>
+
+      <div class="swipe-hint">
+        <span class="arrow">↑</span> తదుపరి వార్తకు స్వైప్ చేయండి
+        <span class="arrow">↓</span> ముందున్న వార్తకు వెనక్కి వెళ్లండి
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "/news?limit=50";
+
+    let newsList = [];
+    let currentIndex = 0;
+
+    const card = document.getElementById("newsCard");
+    const titleEl = document.getElementById("newsTitle");
+    const summaryEl = document.getElementById("newsSummary");
+    const metaEl = document.getElementById("newsMeta");
+    const badgeEl = document.getElementById("indexBadge");
+    const readMoreBtn = document.getElementById("readMoreBtn");
+
+    async function loadNews() {
+      try {
+        const res = await fetch(API_URL);
+        if (!res.ok) throw new Error("API error");
+        newsList = await res.json();
+        if (!Array.isArray(newsList) || newsList.length === 0) {
+          titleEl.textContent = "వార్తలు లభించలేదు";
+          summaryEl.textContent =
+            "కొన్ని క్షణాల తర్వాత మళ్లీ ప్రయత్నించండి.";
+          badgeEl.textContent = "0 / 0";
+          return;
+        }
+        currentIndex = 0;
+        renderNews(currentIndex, "up", true);
+      } catch (e) {
+        console.error(e);
+        titleEl.textContent = "సర్వర్ ఎర్రర్";
+        summaryEl.textContent =
+          "న్యూస్ తెచ్చే సమయంలో సమస్య వచ్చింది. కొద్దిసేపటికి మళ్లీ ప్రయత్నించండి.";
+      }
+    }
+
+    function formatSource(item) {
+      const src = item.source || "";
+      let sourceName = "";
+      if (src.includes("oneindia")) sourceName = "Oneindia Telugu";
+      else if (src.includes("andhrajyothy")) sourceName = "AndhraJyothy";
+      else sourceName = "Telugu News";
+
+      const pub = item.published || "";
+      return sourceName + (pub ? " • " + pub : "");
+    }
+
+    function renderNews(index, direction = "up", first = false) {
+      if (!newsList[index]) return;
+      const item = newsList[index];
+
+      // Set content first (for out-of-the-box accessibility)
+      titleEl.textContent = item.title || "Untitled";
+      summaryEl.textContent =
+        item.summary && item.summary.trim().length > 0
+          ? item.summary
+          : item.raw_summary || "";
+      metaEl.textContent = formatSource(item);
+      badgeEl.textContent = `${index + 1} / ${newsList.length}`;
+
+      readMoreBtn.onclick = () => {
+        if (item.link) {
+          window.location.href = item.link;
+        }
+      };
+
+      if (first) {
+        // no animation for very first render
+        return;
+      }
+
+      // Direction-based enter animation
+      const startClass =
+        direction === "down"
+          ? "anim-enter-down-start"
+          : "anim-enter-up-start";
+      const activeClass =
+        direction === "down" ? "anim-enter-down" : "anim-enter-up";
+
+      card.classList.remove(
+        "anim-enter-up-start",
+        "anim-enter-down-start",
+        "anim-enter-up",
+        "anim-enter-down"
+      );
+      // Start state
+      card.classList.add(startClass);
+      // Force reflow
+      void card.offsetWidth;
+      // Animate into final state
+      card.classList.remove(startClass);
+      card.classList.add(activeClass);
+
+      // Clean up class after animation duration
+      setTimeout(() => {
+        card.classList.remove(activeClass);
+      }, 260);
+    }
+
+    // ----- Swipe handling -----
+    let touchStartY = 0;
+    let touchEndY = 0;
+    let dragging = false;
+
+    const SWIPE_THRESHOLD = 45; // px minimum to count as swipe
+
+    card.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!e.touches || e.touches.length === 0) return;
+        touchStartY = e.touches[0].clientY;
+        touchEndY = touchStartY;
+        dragging = true;
+      },
+      { passive: true }
+    );
+
+    card.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!dragging || !e.touches || e.touches.length === 0) return;
+        touchEndY = e.touches[0].clientY;
+        const delta = touchEndY - touchStartY;
+
+        // small live parallax
+        card.classList.add("dragging");
+        card.style.transform = `translateY(${delta * 0.15}px)`;
+        card.style.opacity = `${Math.max(0.8, 1 - Math.abs(delta) / 500)}`;
+      },
+      { passive: true }
+    );
+
+    card.addEventListener(
+      "touchend",
+      () => {
+        if (!dragging) return;
+        dragging = false;
+
+        const delta = touchEndY - touchStartY;
+        card.classList.remove("dragging");
+        card.style.transform = "";
+        card.style.opacity = "";
+
+        if (Math.abs(delta) < SWIPE_THRESHOLD) {
+          // Not enough movement – treat as tap, do nothing
+          return;
+        }
+
+        if (delta < 0) {
+          // swipe up → next
+          if (currentIndex < newsList.length - 1) {
+            currentIndex += 1;
+            renderNews(currentIndex, "up");
+          }
+        } else {
+          // swipe down → previous
+          if (currentIndex > 0) {
+            currentIndex -= 1;
+            renderNews(currentIndex, "down");
+          }
+        }
+      },
+      { passive: true }
+    );
+
+    // also handle mouse for desktop testing
+    let mouseStartY = null;
+    card.addEventListener("mousedown", (e) => {
+      mouseStartY = e.clientY;
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      if (mouseStartY === null) return;
+      const delta = e.clientY - mouseStartY;
+      mouseStartY = null;
+      if (Math.abs(delta) < SWIPE_THRESHOLD) return;
+      if (delta < 0 && currentIndex < newsList.length - 1) {
+        currentIndex += 1;
+        renderNews(currentIndex, "up");
+      } else if (delta > 0 && currentIndex > 0) {
+        currentIndex -= 1;
+        renderNews(currentIndex, "down");
+      }
+    });
+
+    // ----- Init -----
+    loadNews();
+  </script>
+</body>
+</html>
