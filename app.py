@@ -1,20 +1,26 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-from pathlib import Path
-from datetime import datetime
 import logging
+from pathlib import Path
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from config import ADMIN_SECRET
-from db import news_collection, usage_collection
+from db import get_latest_news, insert_news_items
 from fetch_rss import fetch_all_feeds
-from summarize import generate_summary
+from summarize import generate_summary_for_item
 
-app = FastAPI()
-
-# Logging setup
-logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("short-news-api")
+
+# -----------------------------------------------------------------------------------
+# FastAPI App Setup
+# -----------------------------------------------------------------------------------
+
+app = FastAPI(title="24/7 Telugu News API")
+
+# Static folder mount (animations / css / js)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS
 app.add_middleware(
@@ -25,66 +31,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ------------------------------
-# HOME PAGE  (FIXED - app.html loading)
-# ------------------------------
+BASE_DIR = Path(__file__).resolve().parent
+
+
+# -----------------------------------------------------------------------------------
+# Homepage Route (Reads app.html from root; fallback to static/app.html)
+# -----------------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-def index():
-    html_path = Path("static/app.html")
+def index(request: Request):
+    """
+    Serves app.html — tries root/app.html first, fallback to static/app.html.
+    """
+    # First try root
+    html_path = BASE_DIR / "app.html"
+
+    # If not found → static/app.html
     if not html_path.exists():
-        return HTMLResponse(
-            "<h1>ERROR: static/app.html NOT FOUND</h1>",
-            status_code=500
-        )
-    return html_path.read_text(encoding="utf-8")
+        html_path = BASE_DIR / "static" / "app.html"
 
-# ------------------------------
-# FETCH NEWS API
-# ------------------------------
+    # Final safety check
+    if not html_path.exists():
+        return HTMLResponse("<h1>app.html file missing!</h1>", status_code=500)
+
+    with open(html_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+
+# -----------------------------------------------------------------------------------
+# API: Fetch Latest News
+# -----------------------------------------------------------------------------------
 @app.get("/news")
-async def get_news(limit: int = 20):
-    cursor = news_collection.find().sort("created_at", -1).limit(limit)
-    items = list(cursor)
+def list_news(limit: int = 50):
+    """
+    Returns latest N news items from DB
+    """
+    data = get_latest_news(limit)
+    return JSONResponse(data)
 
-    # Convert ObjectId → string
-    for item in items:
-        item["_id"] = str(item["_id"])
 
-    return JSONResponse(items)
-
-# ------------------------------
-# MANUAL UPDATE API (protected)
-# ------------------------------
+# -----------------------------------------------------------------------------------
+# API: Manual Update Trigger
+# -----------------------------------------------------------------------------------
 @app.get("/update")
-async def update_news(request: Request):
+def update_feed(request: Request):
+    """
+    Admin-only update trigger.
+    """
     secret = request.headers.get("X-Admin-Secret")
     if secret != ADMIN_SECRET:
-        return JSONResponse({"error": "Invalid secret key"}, status_code=401)
+        return JSONResponse({"error": "Invalid secret key"}, status_code=403)
 
-    log.info("Fetching RSS feeds...")
-    inserted, errors = fetch_all_feeds()
+    log.info("Fetching feeds...")
+
+    items = fetch_all_feeds()
+
+    inserted, errors = 0, []
+
+    for item in items:
+        try:
+            # summary generation (dummy or real)
+            generate_summary_for_item(item)
+            insert_news_items([item])
+            inserted += 1
+        except Exception as e:
+            errors.append(str(e))
 
     return {
         "status": "updated",
-        "timestamp": str(datetime.utcnow()),
+        "timestamp": str(request.scope.get("time", "")),
         "inserted": inserted,
-        "errors": errors,
+        "errors": errors
     }
-
-
-# ------------------------------
-#  SUMMARIZE ENDPOINT (dummy mode)
-# ------------------------------
-@app.get("/summarize")
-async def test_summary():
-    text = "Dummy text for testing"
-    summary = generate_summary(text)
-    return {"input": text, "summary": summary}
-
-
-# ------------------------------
-# HEALTH CHECK
-# ------------------------------
-@app.get("/health")
-def health():
-    return {"status": "ok"}
