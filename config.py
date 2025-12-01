@@ -1,25 +1,28 @@
 # config.py
 
-import os
-from dotenv import load_dotenv
+from functools import lru_cache
+from pydantic_settings import BaseSettings
 
-# Load .env if present (local development)
-load_dotenv()
 
-# === Core settings ===
-MONGO_URL = os.getenv("MONGO_URL", "").strip()
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews").strip()
-ADMIN_SECRET = os.getenv("ADMIN_SECRET", "").strip()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
+class Settings(BaseSettings):
+    # Render / Koyeb లో వున్న ENV variables
+    MONGO_URL: str
+    MONGO_DB_NAME: str
+    ADMIN_SECRET: str
 
-# Comma-separated RSS feed URLs
-RSS_FEEDS_RAW = os.getenv("RSS_FEEDS", "").strip()
-RSS_FEEDS = [u.strip() for u in RSS_FEEDS_RAW.split(",") if u.strip()]
+    # ఆప్షనల్ – లేకపోయినా పర్లేదు
+    GOOGLE_API_KEY: str | None = None
+    RSS_FEEDS: str | None = None
 
-# === Gemini model config ===
-# IMPORTANT: ఇక్కడ "models/" పెట్టకూడదు.
-# Endpoint లో ఇప్పటికే /models ఉంది; కాబట్టి plain model id మాత్రమే.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite").strip()
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
 
-# Logging level
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper() or "INFO"
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+#❗ఇదే పేరు కోసం db.py, app.py వెతుకుతున్నాయి
+settings: Settings = get_settings()
