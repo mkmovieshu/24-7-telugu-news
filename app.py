@@ -1,104 +1,98 @@
 import logging
-from pathlib import Path
-
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+from datetime import datetime
 
-from config import ADMIN_SECRET
-from db import get_latest_news, insert_news_items
+from config import ADMIN_SECRET, DUMMY_MODE
+from db import NewsDatabase
 from fetch_rss import fetch_all_feeds
-from summarize import generate_summary_for_item
+from summarize import refine_summary
 
-log = logging.getLogger("short-news-api")
+app = FastAPI()
 
-# -----------------------------------------------------------------------------------
-# FastAPI App Setup
-# -----------------------------------------------------------------------------------
-
-app = FastAPI(title="24/7 Telugu News API")
-
-# Static folder mount (animations / css / js)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Logging
+logger = logging.getLogger("short-news-api")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+logger.addHandler(handler)
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-BASE_DIR = Path(__file__).resolve().parent
+# DB
+db = NewsDatabase()
 
 
-# -----------------------------------------------------------------------------------
-# Homepage Route (Reads app.html from root; fallback to static/app.html)
-# -----------------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def index():
     """
-    Serves app.html — tries root/app.html first, fallback to static/app.html.
+    Serve static HTML from /static/app.html
     """
-    # First try root
-    html_path = BASE_DIR / "app.html"
+    template_path = Path(__file__).parent / "static" / "app.html"
 
-    # If not found → static/app.html
-    if not html_path.exists():
-        html_path = BASE_DIR / "static" / "app.html"
+    if not template_path.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Template not found: {template_path}"
+        )
 
-    # Final safety check
-    if not html_path.exists():
-        return HTMLResponse("<h1>app.html file missing!</h1>", status_code=500)
+    with open(template_path, "r", encoding="utf-8") as f:
+        html = f.read()
 
-    with open(html_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+    return HTMLResponse(content=html, status_code=200)
 
 
-# -----------------------------------------------------------------------------------
-# API: Fetch Latest News
-# -----------------------------------------------------------------------------------
 @app.get("/news")
-def list_news(limit: int = 50):
+def get_news(limit: int = 20):
     """
-    Returns latest N news items from DB
+    Fetch news items from MongoDB
     """
-    data = get_latest_news(limit)
-    return JSONResponse(data)
+    items = db.get_latest_news(limit)
+    return JSONResponse(items)
 
 
-# -----------------------------------------------------------------------------------
-# API: Manual Update Trigger
-# -----------------------------------------------------------------------------------
 @app.get("/update")
-def update_feed(request: Request):
+def update_news(request: Request):
     """
-    Admin-only update trigger.
+    Pull new items from RSS feeds and store in DB
     """
     secret = request.headers.get("X-Admin-Secret")
     if secret != ADMIN_SECRET:
-        return JSONResponse({"error": "Invalid secret key"}, status_code=403)
+        return JSONResponse({"error": "Invalid secret key"}, status_code=401)
 
-    log.info("Fetching feeds...")
+    logger.info("Manual update triggered.")
 
+    # Fetch RSS items
     items = fetch_all_feeds()
 
-    inserted, errors = 0, []
+    inserted = 0
+    errors = []
 
     for item in items:
         try:
-            # summary generation (dummy or real)
-            generate_summary_for_item(item)
-            insert_news_items([item])
+            if DUMMY_MODE:
+                # Dummy mode summary
+                item["summary"] = refine_summary(item.get("raw_summary", ""))
+            else:
+                # Real-time summary
+                item["summary"] = refine_summary(item.get("raw_summary", ""))
+
+            db.insert_news_item(item)
             inserted += 1
         except Exception as e:
             errors.append(str(e))
 
     return {
         "status": "updated",
-        "timestamp": str(request.scope.get("time", "")),
+        "timestamp": datetime.utcnow().isoformat(),
         "inserted": inserted,
-        "errors": errors
+        "errors": errors,
     }
