@@ -1,98 +1,87 @@
-import logging
-from fastapi import FastAPI, HTTPException, Request
+import os
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pathlib import Path
 from datetime import datetime
 
-from config import ADMIN_SECRET, DUMMY_MODE
-from db import NewsDatabase
-from fetch_rss import fetch_all_feeds
-from summarize import refine_summary
+from config import ADMIN_SECRET
+from fetch_rss import fetch_and_store_news
+from summarize import get_latest_news
+from db import get_db
 
-app = FastAPI()
-
-# Logging
-logger = logging.getLogger("short-news-api")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
-logger.addHandler(handler)
+app = FastAPI(title="24/7 Telugu News API")
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# DB
-db = NewsDatabase()
 
-
+# --------------------------
+#        FRONTEND
+# --------------------------
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index(request: Request):
     """
-    Serve static HTML from /static/app.html
+    Load frontend page from static/app.html
     """
-    template_path = Path(__file__).parent / "static" / "app.html"
+    file_path = os.path.join("static", "app.html")
 
-    if not template_path.exists():
-        raise HTTPException(
-            status_code=500,
-            detail=f"Template not found: {template_path}"
+    if not os.path.exists(file_path):
+        return HTMLResponse(
+            content=f"<h2>app.html not found at: {file_path}</h2>",
+            status_code=404
         )
 
-    with open(template_path, "r", encoding="utf-8") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         html = f.read()
 
     return HTMLResponse(content=html, status_code=200)
 
 
+# --------------------------
+#        API ROUTES
+# --------------------------
+
 @app.get("/news")
 def get_news(limit: int = 20):
     """
-    Fetch news items from MongoDB
+    Get latest news items from MongoDB
     """
-    items = db.get_latest_news(limit)
-    return JSONResponse(items)
+    db = get_db()
+    items = list(
+        db.news.find({}, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(limit)
+    )
+    return items
 
 
 @app.get("/update")
 def update_news(request: Request):
     """
-    Pull new items from RSS feeds and store in DB
+    Admin-controlled RSS fetcher
     """
     secret = request.headers.get("X-Admin-Secret")
     if secret != ADMIN_SECRET:
-        return JSONResponse({"error": "Invalid secret key"}, status_code=401)
+        raise HTTPException(status_code=401, detail="Invalid admin secret")
 
-    logger.info("Manual update triggered.")
-
-    # Fetch RSS items
-    items = fetch_all_feeds()
-
-    inserted = 0
-    errors = []
-
-    for item in items:
-        try:
-            if DUMMY_MODE:
-                # Dummy mode summary
-                item["summary"] = refine_summary(item.get("raw_summary", ""))
-            else:
-                # Real-time summary
-                item["summary"] = refine_summary(item.get("raw_summary", ""))
-
-            db.insert_news_item(item)
-            inserted += 1
-        except Exception as e:
-            errors.append(str(e))
-
-    return {
+    inserted, errors = fetch_and_store_news()
+    return JSONResponse({
         "status": "updated",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.utcnow(),
         "inserted": inserted,
-        "errors": errors,
-    }
+        "errors": errors
+    })
+
+
+# --------------------------
+#      HEALTH CHECK
+# --------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok", "time": datetime.utcnow()}
