@@ -1,170 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="te">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>247 Telugu News</title>
+    <meta charset="UTF-8">
+    <title>24/7 Telugu Short News</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <style>
-        body {
-            margin: 0;
-            background: #111;
-            color: white;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-            touch-action: none;
-        }
-
-        .container {
-            width: 100%;
-            height: 100vh;
-            padding: 20px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .headline {
-            font-size: 26px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-
-        .summary {
-            font-size: 20px;
-            line-height: 1.4;
-            opacity: 0.9;
-            margin-bottom: 20px;
-        }
-
-        .more-btn {
-            background: #ffcc00;
-            padding: 10px 20px;
-            border-radius: 8px;
-            color: black;
-            font-weight: bold;
-            text-decoration: none;
-        }
-
-        .actions {
-            display: flex;
-            gap: 20px;
-            margin-top: 25px;
-            font-size: 22px;
-        }
-
-        .like, .dislike {
-            padding: 10px 18px;
-            border-radius: 8px;
-            background: #222;
-        }
-
-        .like.active {
-            background: red;
-        }
-
-        .dislike.active {
-            background: green;
-        }
-
-        /* Swipe transition */
-        .fade {
-            animation: fadeNews 0.35s ease-out;
-        }
-
-        @keyframes fadeNews {
-            from { opacity: 0; transform: translateY(30px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-    </style>
+    <!-- Main UI styles -->
+    <link rel="stylesheet" href="/static/css/app.css">
 </head>
-
 <body>
-
-<div class="container" id="newsContainer">
-    <div class="headline" id="headline">Loading...</div>
-    <div class="summary" id="summary"></div>
-    <a id="moreLink" class="more-btn" target="_blank">More Info</a>
-
-    <div class="actions">
-        <div class="like" id="likeBtn">👍 <span id="likeCount">0</span></div>
-        <div class="dislike" id="dislikeBtn">👎 <span id="dislikeCount">0</span></div>
+<header class="app-header">
+    <div class="app-header-inner">
+        <div class="app-logo-dot"></div>
+        <div class="app-title-block">
+            <h1 class="app-title">24/7 Telugu Short News</h1>
+            <p class="app-subtitle">స్వైప్ చేస్తూ ఒక్కో చిన్న న్యూస్ చదవండి</p>
+        </div>
     </div>
-</div>
+</header>
 
-<script>
-    let news = [];
-    let index = 0;
-    let startY = 0;
+<main class="app-main">
+    <!-- JS ఇక్కడ news_item.html‌ని లోడ్ చేస్తుంది -->
+    <div id="news-root">
+        <div class="news-card news-card-loading">
+            <div class="news-body">
+                <h2 class="news-title">Loading...</h2>
+                <p class="news-summary">
+                    కాసేపటి లోపల తాజా న్యూస్ కనిపిస్తుంది.
+                </p>
+            </div>
+        </div>
+    </div>
+</main>
 
-    async function loadNews() {
-        const res = await fetch("/news");  
-        news = await res.json();
+<footer class="app-footer">
+    <p class="footer-text">
+        Swipe ↑ next news • Swipe ↓ previous news
+    </p>
+</footer>
 
-        if (!news.length) {
-            document.getElementById("headline").innerText = "No News Available";
-            return;
-        }
-
-        showNews(0);
-    }
-
-    function showNews(i) {
-        const n = news[i];
-        index = i;
-
-        document.getElementById("headline").innerText = n.title;
-        document.getElementById("summary").innerText = n.summary;
-        document.getElementById("moreLink").href = n.link;
-
-        document.getElementById("likeCount").innerText = n.likes || 0;
-        document.getElementById("dislikeCount").innerText = n.dislikes || 0;
-
-        document.getElementById("newsContainer").classList.add("fade");
-
-        setTimeout(() => {
-            document.getElementById("newsContainer").classList.remove("fade");
-        }, 350);
-    }
-
-    // LIKE
-    document.getElementById("likeBtn").onclick = () => {
-        news[index].likes = (news[index].likes || 0) + 1;
-        document.getElementById("likeCount").innerText = news[index].likes;
-        document.getElementById("likeBtn").classList.add("active");
-        document.getElementById("dislikeBtn").classList.remove("active");
-    };
-
-    // DISLIKE
-    document.getElementById("dislikeBtn").onclick = () => {
-        news[index].dislikes = (news[index].dislikes || 0) + 1;
-        document.getElementById("dislikeCount").innerText = news[index].dislikes;
-        document.getElementById("dislikeBtn").classList.add("active");
-        document.getElementById("likeBtn").classList.remove("active");
-    };
-
-    // SWIPE DETECTION
-    document.addEventListener("touchstart", (e) => {
-        startY = e.touches[0].clientY;
-    });
-
-    document.addEventListener("touchend", (e) => {
-        let endY = e.changedTouches[0].clientY;
-
-        if (startY - endY > 60) {  
-            // swipe up → next news
-            if (index < news.length - 1) showNews(index + 1);
-        }
-
-        if (endY - startY > 60) { 
-            // swipe down → previous news
-            if (index > 0) showNews(index - 1);
-        }
-    });
-
-    loadNews();
-</script>
-
+<!-- Swipe + loading logic -->
+<script src="/static/js/swipe.js" defer></script>
+<!-- Likes / dislikes logic (నీ దగ్గర ఇప్పటికే ఉన్న ఫైల్) -->
+<script src="/static/js/likes.js" defer></script>
+<script src="/static/js/comments.js" defer></script>
 </body>
 </html>
