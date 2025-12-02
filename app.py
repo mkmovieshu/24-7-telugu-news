@@ -1,23 +1,32 @@
 import logging
 from pathlib import Path
-from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pymongo.collection import Collection
 
-from db import get_db
+from config import settings
+from db import news_collection, init_indexes, get_db
 from fetch_rss import fetch_and_store_all_feeds
-from config import ADMIN_SECRET
 
-# Logging config
-logging.basicConfig(level=logging.INFO)
+# ----- Logging -----
 logger = logging.getLogger("short-news-api")
+logger.setLevel(getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
+logging.basicConfig(level=logger.level)
 
-app = FastAPI(title="short-news-api")
+# ----- App init -----
+app = FastAPI(title="24-7 Telugu News API")
 
-# CORS
+# Static files (for app.html if you want to move later)
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+# CORS – allow all for now (mobile/web clients)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,80 +35,75 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Path to app.html (must be beside app.py)
-BASE_DIR = Path(__file__).resolve().parent
-APP_HTML = BASE_DIR / "app.html"
+
+def get_news_collection() -> Collection:
+    return news_collection
 
 
-def serialize(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """Convert MongoDB doc to JSON serializable format."""
-    doc = dict(doc)
-    if "_id" in doc:
-        doc["_id"] = str(doc["_id"])
-    if isinstance(doc.get("created_at"), datetime):
-        doc["created_at"] = doc["created_at"].isoformat()
-    return doc
+@app.on_event("startup")
+def startup_event() -> None:
+    logger.info("MongoDB connected, initializing indexes")
+    init_indexes()
+    logger.info("Startup complete")
+
+
+# ----- Routes -----
 
 
 @app.get("/", response_class=HTMLResponse)
-def index():
-    """Serve UI"""
-    if not APP_HTML.exists():
-        logger.error(f"app.html NOT FOUND at {APP_HTML}")
-        return HTMLResponse(
-            content=f"<h2>Error:</h2> app.html missing at {APP_HTML}",
-            status_code=500,
-        )
-
-    try:
-        content = APP_HTML.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.error(f"Failed to read app.html: {e}")
-        raise HTTPException(status_code=500, detail="Cannot read app.html")
-
-    return HTMLResponse(content)
+async def index() -> str:
+    """
+    Serve SPA HTML (current app.html in root).
+    """
+    html_path = Path(__file__).parent / "app.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=500, detail="app.html missing")
+    return html_path.read_text(encoding="utf-8")
 
 
 @app.get("/health")
-def health():
-    return {
-        "status": "ok",
-        "time": datetime.utcnow().isoformat() + "Z",
-    }
+async def health() -> dict:
+    return {"status": "ok"}
 
 
-@app.get("/news")
-def get_news(limit: int = 20, skip: int = 0, source: Optional[str] = None):
-    db = get_db()
-
+@app.get("/api/news")
+async def list_news(
+    category: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50),
+    collection: Collection = Depends(get_news_collection),
+):
+    """
+    Get paginated list of news.
+    """
     query = {}
-    if source:
-        query["source"] = source
+    if category:
+        query["category"] = category
 
     cursor = (
-        db.news.find(query)
-        .sort("created_at", -1)
+        collection.find(query)
+        .sort("published_at", -1)
         .skip(skip)
         .limit(limit)
     )
 
-    return [serialize(doc) for doc in cursor]
+    items: List[dict] = []
+    for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        items.append(doc)
+
+    return {"items": items, "count": len(items)}
 
 
-@app.get("/update")
-def update_news(request: Request):
-    if ADMIN_SECRET:
-        header_secret = request.headers.get("X-Admin-Secret")
-        if header_secret != ADMIN_SECRET:
-            logger.warning("Unauthorized access attempt to /update")
-            raise HTTPException(status_code=401, detail="Unauthorized")
+@app.post("/admin/fetch")
+async def admin_fetch(request: Request):
+    """
+    Manually trigger RSS fetch + summarize.
+    """
+    data = await request.json()
+    secret = data.get("secret")
+    if secret != settings.ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
-    logger.info("Manual update triggered")
-    result = fetch_and_store_all_feeds()
-    return JSONResponse(result)
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+    await fetch_and_store_all_feeds()
+    return {"status": "ok"}
