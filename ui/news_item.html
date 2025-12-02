@@ -41,3 +41,24 @@
         </div>
     </div>
 </div>
+<div class="comments-section">
+    <button class="reaction-btn"
+            onclick="toggleComments('{{ news['_id'] }}')">
+        💬 Comments
+    </button>
+
+    <div id="comments-box" class="comments-box" style="display:none;">
+        <div id="comments-list" class="comments-list">
+            <!-- comments load here -->
+        </div>
+
+        <div class="comment-input-row">
+            <input id="comment-input"
+                   class="comment-input"
+                   placeholder="Write a comment...">
+
+            <button class="comment-send-btn"
+                    onclick="submitComment('{{ news['_id'] }}')">Send</button>
+        </div>
+    </div>
+</div>
