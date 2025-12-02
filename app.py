@@ -107,3 +107,10 @@ async def admin_fetch(request: Request):
 
     await fetch_and_store_all_feeds()
     return {"status": "ok"}
+@app.get("/news")
+async def read_first_news():
+    news = await get_first_news_from_db()
+    return templates.TemplateResponse(
+        "news_item.html",
+        {"request": request, "title": news["title"], "summary": news["summary"], "link": news["link"], "id": news["_id"]}
+    )
