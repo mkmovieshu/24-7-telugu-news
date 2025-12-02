@@ -1,98 +1,202 @@
-from datetime import datetime
+from __future__ import annotations
+
+from datetime import datetime, timezone
 from typing import List
 
 import feedparser
 
-from config import settings
-from db import upsert_article
-from summarize import summarize_article
+from config import (
+    RSS_FEEDS,
+    MAX_ITEMS_PER_FEED,
+    MAX_ITEMS_PER_RUN,
+    logger,
+)
+from db import news_collection
+from summarize import gemini_summarize, needs_ai, clean_text
 
 
-def _parse_published(entry) -> datetime:
-    try:
-        if hasattr(entry, "published_parsed") and entry.published_parsed:
-            return datetime(*entry.published_parsed[:6])
-    except Exception:  # noqa: BLE001
-        pass
-    return datetime.utcnow()
+# English + Telugu hype keywords
+HYPE_KEYWORDS = [
+    # English
+    "breaking",
+    "live",
+    "big",
+    "shocking",
+    "sensational",
+    "exclusive",
+    "viral",
+    "update",
+    "alert",
+    # Telugu
+    "బ్రేకింగ్",
+    "లైవ్",
+    "తాజా",
+    "తీవ్ర",
+    "సెన్సేషన్",
+    "షాకింగ్",
+    "వైరల్",
+    "అత్యవసరం",
+]
 
 
-def _get_text(entry) -> str:
-    parts: List[str] = []
-    title = getattr(entry, "title", "")
-    summary = getattr(entry, "summary", "") or getattr(
-        entry, "description", ""
-    )
-    content = ""
-
-    if hasattr(entry, "content") and entry.content:
-        try:
-            content = entry.content[0].value
-        except Exception:  # noqa: BLE001
-            content = ""
-
-    for piece in (title, summary, content):
-        if piece:
-            parts.append(str(piece))
-
-    return "\n\n".join(parts)
-
-
-def _get_image(entry) -> str | None:
-    # Very rough: look for media_thumbnail or media_content
-    media = getattr(entry, "media_thumbnail", None) or getattr(
-        entry, "media_content", None
-    )
-    if media and isinstance(media, list):
-        url = media[0].get("url")
-        if url:
-            return url
-    return None
-
-
-async def fetch_and_store_all_feeds() -> None:
+def _hype_score(title: str, summary: str) -> int:
     """
-    Fetch all feeds from RSS_FEEDS and store+summarize them.
+    చాలా సింపుల్ స్కోరింగ్ – keywords + కొంచెం heuristics.
     """
-    feeds_raw = settings.RSS_FEEDS.strip()
-    if not feeds_raw:
-        print("[WARN] No RSS_FEEDS configured")
-        return
+    title_l = title.lower()
+    summary_l = summary.lower()
+    score = 0
 
-    feed_urls = [u.strip() for u in feeds_raw.split(",") if u.strip()]
+    for kw in HYPE_KEYWORDS:
+        kw_l = kw.lower()
+        if kw_l in title_l:
+            score += 3
+        if kw_l in summary_l:
+            score += 2
 
-    print(f"[INFO] Fetching {len(feed_urls)} RSS feeds")
+    # Numbers ఉంటే (ఎన్నికలు, స్కోర్లు వంటివి) కొంచెం weight
+    if any(ch.isdigit() for ch in title_l):
+        score += 1
 
-    for feed_url in feed_urls:
-        try:
-            parsed = feedparser.parse(feed_url)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[ERROR] Failed to parse feed {feed_url}: {exc}")
+    # title ఎక్కువ లెంగ్త్ ఉంటే చిన్న బోనస్
+    if len(title_l) > 50:
+        score += 1
+
+    return score
+
+
+def _parse_rss_urls() -> List[str]:
+    return [u.strip() for u in RSS_FEEDS.split(",") if u.strip()]
+
+
+def _get_published_at(entry) -> datetime:
+    dt_struct = (
+        getattr(entry, "published_parsed", None)
+        or getattr(entry, "updated_parsed", None)
+        or entry.get("published_parsed")
+        or entry.get("updated_parsed")
+    )
+    if dt_struct:
+        return datetime(
+            dt_struct.tm_year,
+            dt_struct.tm_mon,
+            dt_struct.tm_mday,
+            dt_struct.tm_hour,
+            dt_struct.tm_min,
+            dt_struct.tm_sec,
+            tzinfo=timezone.utc,
+        )
+    return datetime.now(timezone.utc)
+
+
+def _pick_top_hype_items(feed_url: str) -> List[dict]:
+    """
+    ఒక్క feed లో నుంచి hype score ఆధారంగా top N (MAX_ITEMS_PER_FEED) items తీసుకుంటాం.
+    """
+    parsed = feedparser.parse(feed_url)
+    items = []
+
+    for entry in parsed.entries:
+        title = clean_text(getattr(entry, "title", "") or entry.get("title", ""))
+        summary = clean_text(
+            getattr(entry, "summary", "")
+            or entry.get("summary", "")
+            or entry.get("description", "")
+        )
+
+        link = getattr(entry, "link", "") or entry.get("link", "")
+        if not link:
             continue
 
-        source_title = parsed.feed.get("title", feed_url)
+        score = _hype_score(title, summary)
+        items.append(
+            {
+                "entry": entry,
+                "title": title,
+                "summary": summary,
+                "link": link,
+                "score": score,
+            }
+        )
 
-        for entry in parsed.entries:
-            link = getattr(entry, "link", None)
-            title = getattr(entry, "title", "Untitled")
-            if not link:
-                continue
+    # Hype ఎక్కువ ఉన్నవి మొదట
+    items.sort(key=lambda x: x["score"], reverse=True)
 
-            text = _get_text(entry)
-            published_at = _parse_published(entry)
-            image_url = _get_image(entry)
+    # ఒక్క feed నుంచి గరిష్టంగా MAX_ITEMS_PER_FEED మాత్రమే
+    return items[:MAX_ITEMS_PER_FEED]
 
-            # Summarize using Groq (async)
-            summary = await summarize_article(text)
 
-            upsert_article(
-                title=title,
-                link=link,
-                summary=summary,
-                source=source_title,
-                category=None,
-                image_url=image_url,
-                published_at=published_at,
+def _store_item(item: dict, source_url: str) -> bool:
+    """
+    ఒక్క వార్తని DB లో save చెయ్యడం.
+    ఇప్పటికే ఉంటే skip => False
+    కొత్తది అయితే insert చేసి True రిటర్న్.
+    """
+    link = item["link"]
+
+    if news_collection.find_one({"link": link}):
+        return False
+
+    entry = item["entry"]
+    title = item["title"]
+    summary = item["summary"]
+
+    content = summary or title
+
+    if needs_ai(content):
+        final_summary = gemini_summarize(content, title=title)
+    else:
+        final_summary = content
+
+    doc = {
+        "title": title,
+        "summary": final_summary,
+        "link": link,
+        "source": source_url,
+        "published_at": _get_published_at(entry),
+        "created_at": datetime.now(timezone.utc),
+    }
+
+    news_collection.insert_one(doc)
+    return True
+
+
+def fetch_and_store_all_feeds() -> int:
+    """
+    మొత్తం ఫీడ్స్ నుంచి హైప్ ఉన్న న్యూస్ మాత్రమే తీసుకుని,
+    MAX_ITEMS_PER_RUN కి మించినవి insert చెయ్యకుండా stop అవుతుంది.
+    """
+    urls = _parse_rss_urls()
+    if not urls:
+        logger.warning("No RSS_FEEDS configured")
+        return 0
+
+    total_inserted = 0
+
+    for url in urls:
+        if total_inserted >= MAX_ITEMS_PER_RUN:
+            break
+
+        try:
+            logger.info("Fetching feed: %s", url)
+            items = _pick_top_hype_items(url)
+            logger.info(
+                "Feed %s -> selected %d hype items", url, len(items)
             )
 
-        print(f"[INFO] Finished feed {feed_url}")
+            for item in items:
+                if total_inserted >= MAX_ITEMS_PER_RUN:
+                    break
+                if _store_item(item, url):
+                    total_inserted += 1
+
+        except Exception as e:
+            logger.exception("Failed to process feed %s: %s", url, e)
+
+    logger.info("RSS fetch complete. Inserted %d items", total_inserted)
+    return total_inserted
+
+
+if __name__ == "__main__":
+    inserted = fetch_and_store_all_feeds()
+    print(f"Inserted {inserted} news items")
