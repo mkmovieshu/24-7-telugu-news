@@ -1,107 +1,98 @@
-# fetch_rss.py (replace existing)
-import feedparser, requests, logging, traceback
-from db import news_collection, db
-from summarize import gemini_summarize, needs_ai, clean_text
-from config import RSS_FEEDS
-from datetime import datetime, timezone
-import time
+from datetime import datetime
+from typing import List
 
-logging.basicConfig(level=logging.INFO)
+import feedparser
 
-def fetch_full_text(link):
+from config import settings
+from db import upsert_article
+from summarize import summarize_article
+
+
+def _parse_published(entry) -> datetime:
     try:
-        resp = requests.get(link, timeout=8, headers={"User-Agent":"Mozilla/5.0"})
-        resp.raise_for_status()
-        return resp.text
-    except Exception as e:
-        logging.warning("fetch_full_text failed for %s : %s", link, e)
-        return ""
+        if hasattr(entry, "published_parsed") and entry.published_parsed:
+            return datetime(*entry.published_parsed[:6])
+    except Exception:  # noqa: BLE001
+        pass
+    return datetime.utcnow()
 
-def process_rss(max_items_per_feed=20):
-    try:
-        total_inserted = 0
-        for url in RSS_FEEDS:
-            logging.info("Processing feed: %s", url)
-            try:
-                feed = feedparser.parse(url)
-            except Exception as e:
-                logging.exception("feedparser failed for %s", url)
-                db["errors"].insert_one({
-                    "stage":"feed_parse",
-                    "feed":url,
-                    "error": str(e),
-                    "trace": traceback.format_exc(),
-                    "ts": datetime.utcnow()
-                })
+
+def _get_text(entry) -> str:
+    parts: List[str] = []
+    title = getattr(entry, "title", "")
+    summary = getattr(entry, "summary", "") or getattr(
+        entry, "description", ""
+    )
+    content = ""
+
+    if hasattr(entry, "content") and entry.content:
+        try:
+            content = entry.content[0].value
+        except Exception:  # noqa: BLE001
+            content = ""
+
+    for piece in (title, summary, content):
+        if piece:
+            parts.append(str(piece))
+
+    return "\n\n".join(parts)
+
+
+def _get_image(entry) -> str | None:
+    # Very rough: look for media_thumbnail or media_content
+    media = getattr(entry, "media_thumbnail", None) or getattr(
+        entry, "media_content", None
+    )
+    if media and isinstance(media, list):
+        url = media[0].get("url")
+        if url:
+            return url
+    return None
+
+
+async def fetch_and_store_all_feeds() -> None:
+    """
+    Fetch all feeds from RSS_FEEDS and store+summarize them.
+    """
+    feeds_raw = settings.RSS_FEEDS.strip()
+    if not feeds_raw:
+        print("[WARN] No RSS_FEEDS configured")
+        return
+
+    feed_urls = [u.strip() for u in feeds_raw.split(",") if u.strip()]
+
+    print(f"[INFO] Fetching {len(feed_urls)} RSS feeds")
+
+    for feed_url in feed_urls:
+        try:
+            parsed = feedparser.parse(feed_url)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[ERROR] Failed to parse feed {feed_url}: {exc}")
+            continue
+
+        source_title = parsed.feed.get("title", feed_url)
+
+        for entry in parsed.entries:
+            link = getattr(entry, "link", None)
+            title = getattr(entry, "title", "Untitled")
+            if not link:
                 continue
 
-            count = 0
-            for entry in feed.entries:
-                if count >= max_items_per_feed:
-                    break
-                title = entry.get("title","").strip()
-                link = entry.get("link")
-                if not link:
-                    continue
-                # dedupe by link
-                if news_collection.find_one({"link": link}):
-                    continue
+            text = _get_text(entry)
+            published_at = _parse_published(entry)
+            image_url = _get_image(entry)
 
-                # prepare raw content
-                raw = entry.get("summary", "") or (entry.get("content",[{}])[0].get("value","") if entry.get("content") else "")
-                if needs_ai(raw):
-                    html = fetch_full_text(link)
-                    raw = (raw + " " + html)[:6000]
+            # Summarize using Groq (async)
+            summary = await summarize_article(text)
 
-                try:
-                    summary = gemini_summarize(title, raw)
-                except Exception as e:
-                    logging.exception("summarize failed for %s", link)
-                    db["errors"].insert_one({
-                        "stage":"summarize",
-                        "link": link,
-                        "title": title,
-                        "error": str(e),
-                        "trace": traceback.format_exc(),
-                        "ts": datetime.utcnow()
-                    })
-                    summary = (title + " " + (raw[:250] if raw else ""))[:300]
+            upsert_article(
+                title=title,
+                link=link,
+                summary=summary,
+                source=source_title,
+                category=None,
+                image_url=image_url,
+                published_at=published_at,
+            )
 
-                doc = {
-                    "title": title,
-                    "summary": summary,
-                    "link": link,
-                    "category": entry.get("category", "General"),
-                    "published": entry.get("published", datetime.utcnow().isoformat()),
-                    "created_at": datetime.utcnow()
-                }
-                try:
-                    news_collection.insert_one(doc)
-                    logging.info("Inserted: %s", title)
-                    total_inserted += 1
-                except Exception as e:
-                    logging.exception("mongo insert failed for %s", link)
-                    db["errors"].insert_one({
-                        "stage":"mongo_insert",
-                        "link": link,
-                        "title": title,
-                        "error": str(e),
-                        "trace": traceback.format_exc(),
-                        "ts": datetime.utcnow()
-                    })
-                count += 1
-                time.sleep(0.2)  # gentle throttle
-        logging.info("process_rss complete. total_inserted=%d", total_inserted)
-        return total_inserted
-    except Exception as e:
-        logging.exception("process_rss top-level exception")
-        db["errors"].insert_one({
-            "stage":"process_rss_top",
-            "error": str(e),
-            "trace": traceback.format_exc(),
-            "ts": datetime.utcnow()
-        })
-        return 0
-
-if __name__ == "__main__":
-    process_rss()
+        print(f"[INFO] Finished feed {feed_url}")
