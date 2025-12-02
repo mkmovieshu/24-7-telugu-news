@@ -1,30 +1,51 @@
+# groq_client.py
+
+import logging
 from typing import Optional
 
-from groq import Groq
+from config import GROQ_API_KEY, GROQ_MODEL, USE_GROQ
 
-from config import GROQ_API_KEY, GROQ_MODEL, USE_GROQ, logger
+logger = logging.getLogger("short-news-api")
 
-_client: Optional[Groq] = None
-
-if USE_GROQ and GROQ_API_KEY:
-    logger.info("Initializing Groq client")
-    _client = Groq(api_key=GROQ_API_KEY)
-else:
-    logger.warning(
-        "Groq is disabled or GROQ_API_KEY/GOOGLE_API_KEY not set – "
-        "summaries will fall back to raw text."
-    )
+try:
+    from groq import Groq  # type: ignore
+except ImportError:
+    Groq = None  # type: ignore
 
 
-def summarize_text(prompt: str, max_tokens: int = 256) -> str:
+def _make_client() -> Optional["Groq"]:
     """
-    LLM summarize call.
-    మనం హ్యూమన్‌కు చూపించేది కాకుండా, summary generate చెయ్యడానికి
-    మొత్తం prompt ఇక్కడ పంపుతాం.
+    Create Groq client only if:
+    - USE_GROQ is True
+    - GROQ_API_KEY is set
+    - groq library is installed
     """
+    if not USE_GROQ:
+        logger.info("USE_GROQ is False → using trimmed text summaries.")
+        return None
+
+    if not GROQ_API_KEY:
+        logger.warning("GROQ_API_KEY not set → using trimmed text summaries.")
+        return None
+
+    if Groq is None:
+        logger.warning("groq library not installed → using trimmed text summaries.")
+        return None
+
+    return Groq(api_key=GROQ_API_KEY)
+
+
+_client = _make_client()
+
+
+def summarize_text(text: str, max_tokens: int = 512) -> str:
+    """
+    If Groq client is available, call the API and return summary.
+    Else just return trimmed original text (fallback).
+    """
+    # Fallback – no client / no key / no lib
     if not _client:
-        # LLM లేకపోతే, ఖర్చు తప్పించుకోవడానికి అదే టెక్స్ట్ రిటర్న్ చేస్తాం
-        return prompt
+        return text[:max_tokens]
 
     try:
         resp = _client.chat.completions.create(
@@ -33,22 +54,17 @@ def summarize_text(prompt: str, max_tokens: int = 256) -> str:
                 {
                     "role": "system",
                     "content": (
-                        "You are a concise Telugu news summarizer. "
-                        "Always reply in natural Telugu. "
-                        "Give a short, clear summary (2–3 lines) suitable "
-                        "for a mobile news app."
+                        "తెలుగులో చాలా చిన్న, క్లియర్ short news summary ఇవ్వు. "
+                        "Clickbait లేకుండా, single paragraph లో."
                     ),
                 },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
+                {"role": "user", "content": text},
             ],
             max_tokens=max_tokens,
-            temperature=0.2,
+            temperature=0.3,
         )
-        return (resp.choices[0].message.content or "").strip()
+        summary = resp.choices[0].message.content.strip()
+        return summary or text[:max_tokens]
     except Exception as e:
-        logger.exception("Groq summarization failed: %s", e)
-        # Error వచ్చినప్పుడు కూడా యాప్ క్రాష్ కాకూడదు
-        return prompt
+        logger.error("Groq summarize failed: %s", e)
+        return text[:max_tokens]
