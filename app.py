@@ -1,116 +1,150 @@
-import logging
-from pathlib import Path
-from typing import List, Optional
-
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
-from pymongo.collection import Collection
-
-from config import settings
-from db import news_collection, init_indexes, get_db
+from fastapi.templating import Jinja2Templates
+from bson import ObjectId
+from db import get_db
 from fetch_rss import fetch_and_store_all_feeds
+from summarize import needs_ai, clean_text
+from groq_client import summarize_text
 
-# ----- Logging -----
-logger = logging.getLogger("short-news-api")
-logger.setLevel(getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
-logging.basicConfig(level=logger.level)
+app = FastAPI()
 
-# ----- App init -----
-app = FastAPI(title="24-7 Telugu News API")
+# Static files
+app.mount("/static", StaticFiles(directory="statics"), name="static")
 
-# Static files (for app.html if you want to move later)
-static_dir = Path(__file__).parent / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# Templates (UI)
+templates = Jinja2Templates(directory="ui")
 
 
-# CORS – allow all for now (mobile/web clients)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-def get_news_collection() -> Collection:
-    return news_collection
-
-
-@app.on_event("startup")
-def startup_event() -> None:
-    logger.info("MongoDB connected, initializing indexes")
-    init_indexes()
-    logger.info("Startup complete")
-
-
-# ----- Routes -----
-
-
-@app.get("/", response_class=HTMLResponse)
-async def index() -> str:
-    """
-    Serve SPA HTML (current app.html in root).
-    """
-    html_path = Path(__file__).parent / "app.html"
-    if not html_path.exists():
-        raise HTTPException(status_code=500, detail="app.html missing")
-    return html_path.read_text(encoding="utf-8")
-
-
-@app.get("/health")
-async def health() -> dict:
-    return {"status": "ok"}
-
-
-@app.get("/api/news")
-async def list_news(
-    category: Optional[str] = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=50),
-    collection: Collection = Depends(get_news_collection),
-):
-    """
-    Get paginated list of news.
-    """
-    query = {}
-    if category:
-        query["category"] = category
-
-    cursor = (
-        collection.find(query)
-        .sort("published_at", -1)
-        .skip(skip)
-        .limit(limit)
+# -------------------------------
+# HOME PAGE → REDIRECT TO /news
+# -------------------------------
+@app.get("/")
+async def home(request: Request):
+    return templates.TemplateResponse(
+        "app.html",
+        {"request": request}
     )
 
-    items: List[dict] = []
-    for doc in cursor:
-        doc["_id"] = str(doc["_id"])
-        items.append(doc)
 
-    return {"items": items, "count": len(items)}
+# ------------------------------------
+# FETCH NEWS LIST (One news per page)
+# ------------------------------------
+def serialize_news(n):
+    return {
+        "id": str(n["_id"]),
+        "title": n["title"],
+        "summary": n.get("summary", ""),
+        "link": n["link"],
+        "likes": n.get("likes", 0),
+        "dislikes": n.get("dislikes", 0),
+        "comments": n.get("comments", [])
+    }
 
-
-@app.post("/admin/fetch")
-async def admin_fetch(request: Request):
-    """
-    Manually trigger RSS fetch + summarize.
-    """
-    data = await request.json()
-    secret = data.get("secret")
-    if secret != settings.ADMIN_SECRET:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    await fetch_and_store_all_feeds()
-    return {"status": "ok"}
+# ------------------------------------
+# /news → First news
+# ------------------------------------
 @app.get("/news")
-async def read_first_news():
-    news = await get_first_news_from_db()
+async def first_news(request: Request):
+    db = get_db()
+    doc = await db.news.find_one(sort=[("_id", 1)])
+
+    if not doc:
+        raise HTTPException(404, "No news found")
+
     return templates.TemplateResponse(
         "news_item.html",
-        {"request": request, "title": news["title"], "summary": news["summary"], "link": news["link"], "id": news["_id"]}
+        {"request": request, "news": serialize_news(doc)}
     )
+
+
+# ------------------------------------
+# /news/{id} → Specific news
+# ------------------------------------
+@app.get("/news/{news_id}")
+async def get_news(request: Request, news_id: str):
+    db = get_db()
+    doc = await db.news.find_one({"_id": ObjectId(news_id)})
+
+    if not doc:
+        raise HTTPException(404, "News not found")
+
+    return templates.TemplateResponse(
+        "news_item.html",
+        {"request": request, "news": serialize_news(doc)}
+    )
+
+
+# ------------------------------------
+# Swipe NEXT → /news/next/{id}
+# ------------------------------------
+@app.get("/news/next/{news_id}")
+async def next_news(request: Request, news_id: str):
+    db = get_db()
+    doc = await db.news.find_one({"_id": {"$gt": ObjectId(news_id)}}, sort=[("_id", 1)])
+
+    if not doc:
+        # Go to first
+        doc = await db.news.find_one(sort=[("_id", 1)])
+
+    return templates.TemplateResponse(
+        "news_item.html",
+        {"request": request, "news": serialize_news(doc)}
+    )
+
+
+# ------------------------------------
+# Swipe PREVIOUS → /news/prev/{id}
+# ------------------------------------
+@app.get("/news/prev/{news_id}")
+async def prev_news(request: Request, news_id: str):
+    db = get_db()
+    doc = await db.news.find_one({"_id": {"$lt": ObjectId(news_id)}}, sort=[("_id", -1)])
+
+    if not doc:
+        # Go to last
+        doc = await db.news.find_one(sort=[("_id", -1)])
+
+    return templates.TemplateResponse(
+        "news_item.html",
+        {"request": request, "news": serialize_news(doc)}
+    )
+
+
+# ------------------------------------
+# Like
+# ------------------------------------
+@app.post("/api/like/{news_id}")
+async def like_news(news_id: str):
+    db = get_db()
+    await db.news.update_one({"_id": ObjectId(news_id)}, {"$inc": {"likes": 1}})
+    doc = await db.news.find_one({"_id": ObjectId(news_id)})
+    return {"likes": doc.get("likes", 0), "dislikes": doc.get("dislikes", 0)}
+
+
+# ------------------------------------
+# Dislike
+# ------------------------------------
+@app.post("/api/dislike/{news_id}")
+async def dislike_news(news_id: str):
+    db = get_db()
+    await db.news.update_one({"_id": ObjectId(news_id)}, {"$inc": {"dislikes": 1}})
+    doc = await db.news.find_one({"_id": ObjectId(news_id)})
+    return {"likes": doc.get("likes", 0), "dislikes": doc.get("dislikes", 0)}
+
+
+# ------------------------------------
+# Add Comment
+# ------------------------------------
+@app.post("/api/comment/{news_id}")
+async def add_comment(news_id: str, request: Request):
+    data = await request.json()
+    text = data.get("comment")
+
+    db = get_db()
+    await db.news.update_one(
+        {"_id": ObjectId(news_id)},
+        {"$push": {"comments": text}}
+    )
+
+    return {"status": "ok"}
