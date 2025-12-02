@@ -1,12 +1,43 @@
 <div class="news-card">
-    <h2 class="news-title">{{ title }}</h2>
-    <p class="news-text">{{ summary }}</p>
+    <div class="news-body">
+        <h2 class="news-title">
+            {{ news["title"] }}
+        </h2>
 
-    <a class="read-btn" href="{{ link }}" target="_blank">పూర్తి వార్త చదవండి</a>
+        {% if news.get("summary") %}
+            <p class="news-summary">
+                {{ news["summary"] }}
+            </p>
+        {% elif news.get("description") %}
+            <p class="news-summary">
+                {{ news["description"] }}
+            </p>
+        {% endif %}
+    </div>
 
-    <div class="actions">
-        <button class="like-btn" onclick="like('{{ id }}')">👍 <span id="like-{{ id }}">{{ likes }}</span></button>
-        <button class="dislike-btn" onclick="dislike('{{ id }}')">👎 <span id="dislike-{{ id }}">{{ dislikes }}</span></button>
-        <button class="comment-btn" onclick="openComments('{{ id }}')">💬 కామెంట్</button>
+    <div class="news-actions">
+        {% if news.get("link") %}
+            <a href="{{ news['link'] }}" target="_blank" rel="noopener noreferrer" class="more-btn">
+                పూర్తి వార్త చదవండి
+            </a>
+        {% endif %}
+
+        <div class="reaction-row">
+            <button class="reaction-btn like-btn"
+                    data-news-id="{{ news['_id'] }}">
+                <span class="icon">👍</span>
+                <span class="count" data-like-count>
+                    {{ news.get("likes", 0) }}
+                </span>
+            </button>
+
+            <button class="reaction-btn dislike-btn"
+                    data-news-id="{{ news['_id'] }}">
+                <span class="icon">👎</span>
+                <span class="count" data-dislike-count>
+                    {{ news.get("dislikes", 0) }}
+                </span>
+            </button>
+        </div>
     </div>
 </div>
