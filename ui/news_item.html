@@ -1,0 +1,12 @@
+<div class="news-card">
+    <h2 class="news-title">{{ title }}</h2>
+    <p class="news-text">{{ summary }}</p>
+
+    <a class="read-btn" href="{{ link }}" target="_blank">పూర్తి వార్త చదవండి</a>
+
+    <div class="actions">
+        <button class="like-btn" onclick="like('{{ id }}')">👍 <span id="like-{{ id }}">{{ likes }}</span></button>
+        <button class="dislike-btn" onclick="dislike('{{ id }}')">👎 <span id="dislike-{{ id }}">{{ dislikes }}</span></button>
+        <button class="comment-btn" onclick="openComments('{{ id }}')">💬 కామెంట్</button>
+    </div>
+</div>
