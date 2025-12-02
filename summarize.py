@@ -1,44 +1,53 @@
 import re
 
-from groq_client import async_summarize_text, GroqError
+from config import logger
+from gemini_client import summarize_text
 
 
-def clean_text(text: str) -> str:
+def clean_text(text: str | None) -> str:
     if not text:
         return ""
-    # Remove HTML tags (very rough)
+    # HTML tags, extra spaces తీసేయడం
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
-def needs_ai(text: str) -> bool:
+def needs_ai(text: str, max_chars: int = 280) -> bool:
     """
-    Decide whether to call Groq or just use original text.
-    We skip AI if text already very short.
+    text చిన్నదైతే LLM call skip చేసి టోకెన్లు సేవ్ చేసుకుంటాం.
     """
     if not text:
         return False
-    return len(text) > 220  # characters
+    return len(text) > max_chars
 
 
-async def summarize_article(raw_text: str) -> str:
+def gemini_summarize(text: str, title: str = "") -> str:
     """
-    Main function used by fetch_rss.
+    బయట కోడ్‌లో ఉన్న function పేరు మార్చకుండా ఉంచాం (gemini_summarize),
+    కానీ లోపల Groq ను వాడుతున్నాం.
     """
-    text = clean_text(raw_text)
+    text = clean_text(text)
 
     if not text:
         return ""
 
-    # If small text, don't waste tokens
-    if not needs_ai(text):
-        # Just return first 160 chars as "summary"
-        return text[:160] + ("..." if len(text) > 160 else "")
+    # Prompt in Telugu – news app కి తగ్గట్టు చిన్న summary
+    prompt = (
+        "కింద ఇచ్చిన వార్తని 2–3 లైన్లలో, సింపుల్ తెలుగు లో "
+        "చిన్న షార్ట్ న్యూస్‌లా సమ్మరీ చెయ్యి. "
+        "అవసరమైన పాయింట్లు మాత్రమే ఉంచు, క్లిక్‌బైట్ మాటలు వాడకు.\n\n"
+    )
+    if title:
+        prompt += f"శీర్షిక: {title}\n"
+    prompt += f"వివరాలు:\n{text}"
 
-    try:
-        return await async_summarize_text(text, language="te")
-    except GroqError as e:
-        # On failure, fall back to trimmed original
-        print(f"[WARN] Groq summarization failed: {e}")
-        return text[:220] + ("..." if len(text) > 220 else "")
+    summary = summarize_text(prompt, max_tokens=200)
+    summary = clean_text(summary)
+
+    if not summary:
+        # LLM ఏదైనా గందరగోళం చేస్తే, అసలు టెక్స్ట్ నుంచి truncate
+        logger.warning("Empty summary from LLM, falling back to original text")
+        return text[:250]
+
+    return summary
