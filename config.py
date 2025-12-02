@@ -1,25 +1,31 @@
-import os
+import logging
 from functools import lru_cache
+from pydantic_settings import BaseSettings
 
 
-class Settings:
-    # Mongo / app core
-    MONGO_URL: str = os.getenv("MONGO_URL", "")
-    MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "short_news")
-    ADMIN_SECRET: str = os.getenv("ADMIN_SECRET", "changeme")
+class Settings(BaseSettings):
+    # Core env vars (ముందు నుంచే ఉన్నవి – పేర్లు మార్చలేదు)
+    MONGO_URL: str
+    MONGO_DB_NAME: str
+    ADMIN_SECRET: str
+    GOOGLE_API_KEY: str | None = None  # క్రితం Gemini key – ఉంచుతున్నాం
+    RSS_FEEDS: str  # కామా సెపరేటెడ్ RSS URLs
 
-    # RSS feeds – comma separated list of URLs
-    RSS_FEEDS: str = os.getenv("RSS_FEEDS", "")
+    # Groq settings
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    USE_GROQ: bool = True
+
+    # Summarization & fetch limits
+    MAX_ITEMS_PER_FEED: int = 3   # ఒక్క ఫీడ్ నుంచి గరిష్టంగా 3 న్యూస్
+    MAX_ITEMS_PER_RUN: int = 30   # ఒక్క రన్‌లో మొత్తం 30 న్యూస్ వరకు
 
     # Logging
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    LOG_LEVEL: str = "INFO"
 
-    # --- Groq summarizer config ---
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    # Latest fast-cheap Telugu-capable model; change if you want
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-    # Toggle to disable Groq in emergencies
-    USE_GROQ: bool = os.getenv("USE_GROQ", "true").lower() == "true"
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 
 @lru_cache
@@ -29,8 +35,25 @@ def get_settings() -> Settings:
 
 settings = get_settings()
 
-# Quick sanity checks (won't crash if missing, just warnings in logs)
-if not settings.MONGO_URL:
-    print("[WARN] MONGO_URL not set")
-if not settings.GROQ_API_KEY:
-    print("[WARN] GROQ_API_KEY not set - summaries will fail")
+# Exported variables (ఇవి ఇతర ఫైళ్లలో import అవుతాయి)
+MONGO_URL = settings.MONGO_URL
+MONGO_DB_NAME = settings.MONGO_DB_NAME
+ADMIN_SECRET = settings.ADMIN_SECRET
+GOOGLE_API_KEY = settings.GOOGLE_API_KEY
+RSS_FEEDS = settings.RSS_FEEDS
+
+# Groq – GROQ_API_KEY సెట్ చెయ్యకపోతే, తప్పనిసరి అయితే GOOGLE_API_KEY ని ఉపయోగిస్తాం
+GROQ_API_KEY = settings.GROQ_API_KEY or settings.GOOGLE_API_KEY
+GROQ_MODEL = settings.GROQ_MODEL
+USE_GROQ = settings.USE_GROQ and bool(GROQ_API_KEY)
+
+MAX_ITEMS_PER_FEED = settings.MAX_ITEMS_PER_FEED
+MAX_ITEMS_PER_RUN = settings.MAX_ITEMS_PER_RUN
+
+LOG_LEVEL = settings.LOG_LEVEL.upper()
+
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("short-news-api")
