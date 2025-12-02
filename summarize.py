@@ -1,147 +1,129 @@
+import os
 import logging
 import re
-from typing import Optional
+from typing import Any
 
-from config import GROQ_API_KEY
-
-# Try to import Groq SDK, but don't crash if it's missing.
 try:
-    from groq import Groq  # type: ignore
-except ImportError:  # pragma: no cover
+    from groq import Groq
+except ImportError:
     Groq = None  # type: ignore
 
+# --- Logging ---
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger("short-news-api")
+
+# --- Groq client ---
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+_groq_client: Any = None
+if GROQ_API_KEY and Groq is not None:
+    _groq_client = Groq(api_key=GROQ_API_KEY)
+    logger.info("Groq client initialized for summaries")
+else:
+    logger.warning(
+        "GROQ_API_KEY missing or groq library not installed. "
+        "Falling back to trimmed original text for summaries."
+    )
 
 
 def clean_text(text: str) -> str:
     """
-    Remove HTML tags, extra spaces, and weird whitespace.
+    RSS లో వచ్చే HTML, scripts, extra whitespace తీసేసే ఫంక్షన్.
     """
     if not text:
         return ""
 
-    # Remove script/style tags completely
-    text = re.sub(r"<script.*?</script>", " ", text, flags=re.S | re.I)
-    text = re.sub(r"<style.*?</style>", " ", text, flags=re.S | re.I)
-
-    # Remove remaining HTML tags
+    # Remove HTML tags
     text = re.sub(r"<[^>]+>", " ", text)
-
-    # Normalize whitespace
+    # Unescape basic HTML entities
+    text = (
+        text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&quot;", '"')
+        .replace("&#39;", "'")
+    )
+    # Collapse whitespace
     text = re.sub(r"\s+", " ", text)
-
     return text.strip()
 
 
 def needs_ai(text: str) -> bool:
     """
-    Decide if this item really needs AI summarization.
-
-    - Very short items: no need
-    - Longer / multi-sentence: use AI
+    ఇప్పుడు కాపీ రైట్ టెన్షన్ తగ్గించేందుకు
+    **ప్రతి న్యూస్‌కి** AI సమ్మరీ జనరేట్ చేస్తాం.
     """
-    if not text:
-        return False
-
-    cleaned = clean_text(text)
-    if len(cleaned) < 120:
-        return False
-
-    # If there is at least one full-stop or multiple clauses, use AI
-    if "." in cleaned or "?" in cleaned or "!" in cleaned or "।" in cleaned:
-        return True
-
-    return len(cleaned) > 160
+    text = (text or "").strip()
+    return bool(text)
 
 
-def _get_groq_client() -> Optional["Groq"]:
+def _fallback_short(text: str, max_words: int = 35) -> str:
     """
-    Return Groq client if available & key is set, otherwise None.
+    Groq fail అయ్యినా లేదా API key లేకపోయినా, ఒరిజినల్
+    టెక్స్ట్ నుంచి చిన్న snippet మాత్రమే ఉపయోగించే fallback.
     """
-    if not GROQ_API_KEY:
-        logger.warning("GROQ_API_KEY not configured; summarization will be fallback only")
-        return None
-
-    if Groq is None:
-        logger.warning("groq package not installed; run `pip install groq` and add it to requirements.txt")
-        return None
-
-    try:
-        return Groq(api_key=GROQ_API_KEY)
-    except Exception as e:  # pragma: no cover
-        logger.exception("Failed to create Groq client: %s", e)
-        return None
+    words = clean_text(text).split()
+    if len(words) <= max_words:
+        return " ".join(words)
+    return " ".join(words[:max_words]) + "…"
 
 
-def _fallback_summary(text: str, max_chars: int = 400) -> str:
+_SYSTEM_PROMPT = (
+    "నువ్వు ఒక తెలుగు షార్ట్ న్యూస్ ఎడిటర్.\n\n"
+    "క్రింద ఇచ్చిన వార్త ఆధారంగా 100% కొత్తగా, నీ మాటల్లో రాయాలి.\n"
+    "అసలు వెబ్‌సైట్ లో ఉన్న వాక్యాలు లేదా పెద్ద పదబంధాలు "
+    "మళ్లీ కాపీ చేయకూడదు.\n\n"
+    "రూల్స్:\n"
+    "- గరిష్టం 2 వాక్యాలు మాత్రమే.\n"
+    "- మొత్తం పొడవు సుమారుని 25–35 పదాలు.\n"
+    "- సింపుల్, క్లియర్ తెలుగు. క్లిక్‌బైట్ లాంటి మాటలు వద్దు.\n"
+    "- వెబ్‌సైట్ పేరు, రిపోర్టర్ పేరు, తేదీ వంటివి అవసరంలేకుంటే mention చేయకూడదు.\n"
+)
+
+
+def gemini_summarize(*args, **kwargs) -> str:
     """
-    Simple non-AI fallback: trimmed & cleaned text.
-    """
-    cleaned = clean_text(text)
-    if len(cleaned) <= max_chars:
-        return cleaned
-    return cleaned[: max_chars].rstrip() + "..."
+    పాత కోడ్ లో ఫంక్షన్ పేరు 'gemini_summarize' గా ఉన్నందుకు,
+    అదే పేరు ఉంచి లోపల Groq ని యూజ్ చేస్తున్నాం.
 
-
-def gemini_summarize(text: str, category: Optional[str] = None) -> str:
+    Signature ఎలాగైనా పాస్ అయినా first argument/text నుంచే
+    summary తయారు చేస్తాం.
     """
-    Kept old name `gemini_summarize` so the rest of the code doesn't break,
-    but internally we now use Groq.
+    # --- figure out text argument safely ---
+    text = ""
+    if args:
+        text = args[0] or ""
+    elif "text" in kwargs:
+        text = kwargs.get("text") or ""
+    else:
+        logger.warning("gemini_summarize called without text; returning empty string")
+        return ""
 
-    - Input: full news text (optionally category)
-    - Output: 1–2 line Telugu summary suitable for short-news app.
-    """
+    text = clean_text(str(text))
     if not text:
         return ""
 
-    client = _get_groq_client()
-    if client is None:
-        # No Groq / no key => fallback summary
-        return _fallback_summary(text)
-
-    cleaned = clean_text(text)
-
-    system_prompt = (
-        "You are a news summarization assistant for a Telugu short-news mobile app. "
-        "Write very short, clear summaries in colloquial Telugu. "
-        "Use 1–2 sentences only, no bullet points, no emojis. "
-        "Do not add extra commentary; just the core news."
-    )
-
-    user_prompt = (
-        "క్రింది వార్తను 1–2 చిన్న వాక్యాల్లో, "
-        "ఫోన్ యాప్‌లో కనిపించేలా మాట్లాడే తెలుగు స్టైల్‌లో సారాంశం రాయండి.\n\n"
-    )
-
-    if category:
-        user_prompt += f"కేటగిరీ: {category}\n\n"
-
-    user_prompt += f"వార్త:\n{cleaned}"
+    # Groq not configured -> fallback
+    if not _groq_client:
+        logger.warning("Groq client not available, using fallback summary")
+        return _fallback_short(text)
 
     try:
-        response = client.chat.completions.create(
+        logger.debug("Calling Groq for short Telugu summary")
+        completion = _groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
+            temperature=0.4,
+            max_tokens=120,  # 2 చిన్న వాక్యాలకు చాలుతుంది
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": text},
             ],
-            temperature=0.3,
-            max_tokens=256,
         )
 
-        summary = (
-            response.choices[0].message.content.strip()
-            if response.choices
-            else ""
-        )
+        summary = completion.choices[0].message.content.strip()
+        summary = clean_text(summary)
 
-        if not summary:
-            return _fallback_summary(text)
-
-        # Extra cleanup: one-line, trimmed
-        summary = re.sub(r"\s+", " ", summary).strip()
-        return summary
-
-    except Exception as e:  # pragma: no cover
-        logger.exception("Groq summarization failed: %s", e)
-        return _fallback_summary(text)
+        # Safety: చాలా పెద్దగా వస్తే కూడా కట్ చెయ్యి
+        return _fallback_short(summary, max_words=40)
+    except Exception as e:
+        logger.error("Groq summarize failed: %s", e)
+        return _fallback_short(text)
