@@ -62,3 +62,21 @@ async def dislike_news(news_id: str):
         {"$inc": {"dislikes": 1}}
     )
     return {"status": "ok"}
+@app.get("/api/comments/{news_id}")
+async def get_comments(news_id: str):
+    doc = await db.news.find_one({"_id": ObjectId(news_id)})
+    return {"comments": doc.get("comments", [])}
+
+
+@app.post("/api/comments/{news_id}")
+async def post_comment(news_id: str, body: dict):
+    text = body.get("text", "").strip()
+    if not text:
+        return {"error": "empty"}
+
+    await db.news.update_one(
+        {"_id": ObjectId(news_id)},
+        {"$push": {"comments": {"text": text}}}
+    )
+
+    return {"status": "ok"}
