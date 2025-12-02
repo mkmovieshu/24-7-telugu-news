@@ -1,58 +1,54 @@
-import httpx
-from config import settings
+from typing import Optional
 
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+from groq import Groq
 
+from config import GROQ_API_KEY, GROQ_MODEL, USE_GROQ, logger
 
-class GroqError(Exception):
-    pass
+_client: Optional[Groq] = None
 
-
-async def async_summarize_text(text: str, language: str = "te") -> str:
-    """
-    Async summarization using Groq Chat Completions API.
-    language = 'te' => Telugu, 'en' => English, etc.
-    """
-    if not settings.USE_GROQ:
-        raise GroqError("Groq summarization disabled via USE_GROQ=false")
-    if not settings.GROQ_API_KEY:
-        raise GroqError("GROQ_API_KEY is not set")
-
-    system_prompt = (
-        "You are a professional news editor. "
-        "Summarize the given news article into 2 short bullet points in "
-        f"{'Telugu' if language == 'te' else 'English'}. "
-        "Keep total under 40 words. No extra commentary."
+if USE_GROQ and GROQ_API_KEY:
+    logger.info("Initializing Groq client")
+    _client = Groq(api_key=GROQ_API_KEY)
+else:
+    logger.warning(
+        "Groq is disabled or GROQ_API_KEY/GOOGLE_API_KEY not set – "
+        "summaries will fall back to raw text."
     )
 
-    payload = {
-        "model": settings.GROQ_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": text},
-        ],
-        "temperature": 0.3,
-        "max_tokens": 160,
-    }
 
-    headers = {
-        "Authorization": f"Bearer {settings.GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
+def summarize_text(prompt: str, max_tokens: int = 256) -> str:
+    """
+    LLM summarize call.
+    మనం హ్యూమన్‌కు చూపించేది కాకుండా, summary generate చెయ్యడానికి
+    మొత్తం prompt ఇక్కడ పంపుతాం.
+    """
+    if not _client:
+        # LLM లేకపోతే, ఖర్చు తప్పించుకోవడానికి అదే టెక్స్ట్ రిటర్న్ చేస్తాం
+        return prompt
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(GROQ_API_URL, json=payload, headers=headers)
-        if resp.status_code != 200:
-            raise GroqError(
-                f"Groq API error {resp.status_code}: {resp.text[:200]}"
-            )
-
-        data = resp.json()
-        try:
-            return (
-                data["choices"][0]["message"]["content"]
-                .strip()
-                .replace("\n\n", "\n")
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise GroqError(f"Invalid Groq response: {data}") from exc
+    try:
+        resp = _client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a concise Telugu news summarizer. "
+                        "Always reply in natural Telugu. "
+                        "Give a short, clear summary (2–3 lines) suitable "
+                        "for a mobile news app."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            max_tokens=max_tokens,
+            temperature=0.2,
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except Exception as e:
+        logger.exception("Groq summarization failed: %s", e)
+        # Error వచ్చినప్పుడు కూడా యాప్ క్రాష్ కాకూడదు
+        return prompt
