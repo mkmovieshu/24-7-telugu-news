@@ -1,44 +1,81 @@
-// swipe.js
+// Simple swipe + fetch logic
+const newsRoot = document.getElementById("news-root");
+let isLoading = false;
 
-export function attachSwipe(container, { onSwipeUp, onSwipeDown }) {
-  let startY = null;
-  let startTime = 0;
+async function loadNews(direction = null) {
+    if (isLoading) return;
+    isLoading = true;
 
-  const threshold = 50; // px
-  const maxTime = 600; // ms
+    try {
+        const params = direction ? `?direction=${direction}` : "";
+        const res = await fetch(`/news${params}`);
+        if (!res.ok) {
+            throw new Error("Failed to load news");
+        }
 
-  function onTouchStart(e) {
-    const touch = e.touches[0];
-    startY = touch.clientY;
-    startTime = Date.now();
-  }
+        const html = await res.text();
+        newsRoot.innerHTML = html;
 
-  function onTouchEnd(e) {
-    if (startY === null) return;
-    const touch = e.changedTouches[0];
-    const diffY = touch.clientY - startY;
-    const dt = Date.now() - startTime;
-
-    if (dt <= maxTime && Math.abs(diffY) > threshold) {
-      if (diffY < 0 && typeof onSwipeUp === "function") {
-        onSwipeUp();
-      } else if (diffY > 0 && typeof onSwipeDown === "function") {
-        onSwipeDown();
-      }
+        // కొత్త కార్డ్‌కి flip / slide animation autoగా run అవుతుంది
+        // ఎందుకంటే CSS లో .news-card కి animation set చేశాం
+    } catch (err) {
+        console.error(err);
+        newsRoot.innerHTML = `
+            <div class="news-card">
+                <div class="news-body">
+                    <h2 class="news-title">న్యూస్ లోడ్ కాలేదు</h2>
+                    <p class="news-summary">
+                        నెట్ కనెక్షన్ చెక్ చేసి, మళ్లీ కొంచెం సేపటి తర్వాత ప్రయత్నించండి.
+                    </p>
+                </div>
+            </div>
+        `;
+    } finally {
+        isLoading = false;
     }
-
-    startY = null;
-  }
-
-  container.addEventListener("touchstart", onTouchStart, { passive: true });
-  container.addEventListener("touchend", onTouchEnd, { passive: true });
-
-  // keyboard: up/down arrows
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowUp") {
-      onSwipeUp && onSwipeUp();
-    } else if (e.key === "ArrowDown") {
-      onSwipeDown && onSwipeDown();
-    }
-  });
 }
+
+function setupSwipe() {
+    let startY = null;
+    const SWIPE_THRESHOLD = 40;
+
+    document.addEventListener("touchstart", (e) => {
+        if (e.touches.length === 1) {
+            startY = e.touches[0].clientY;
+        }
+    });
+
+    document.addEventListener("touchend", (e) => {
+        if (startY === null) return;
+        const endY = e.changedTouches[0].clientY;
+        const deltaY = startY - endY;
+
+        if (deltaY > SWIPE_THRESHOLD) {
+            // swipe up -> next
+            loadNews("next");
+        } else if (deltaY < -SWIPE_THRESHOLD) {
+            // swipe down -> previous
+            loadNews("prev");
+        }
+
+        startY = null;
+    });
+
+    // Mouse wheel support (mobile కాకుండా for testing)
+    let wheelTimeout;
+    window.addEventListener("wheel", (e) => {
+        clearTimeout(wheelTimeout);
+        wheelTimeout = setTimeout(() => {
+            if (e.deltaY > 0) {
+                loadNews("next");
+            } else if (e.deltaY < 0) {
+                loadNews("prev");
+            }
+        }, 60);
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    loadNews();      // మొదటి న్యూస్
+    setupSwipe();    // swipe handlers
+});
