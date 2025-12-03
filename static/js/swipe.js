@@ -1,81 +1,61 @@
-// Simple swipe + fetch logic
-const newsRoot = document.getElementById("news-root");
-let isLoading = false;
+// Swipe detection: calls callback("next") / callback("prev")
 
-async function loadNews(direction = null) {
-    if (isLoading) return;
-    isLoading = true;
+window.Swipe = (function () {
+  const MIN_DISTANCE = 40; // px
 
-    try {
-        const params = direction ? `?direction=${direction}` : "";
-        const res = await fetch(`/news${params}`);
-        if (!res.ok) {
-            throw new Error("Failed to load news");
-        }
+  function setupSwipe(element, callback) {
+    if (!element) return;
 
-        const html = await res.text();
-        newsRoot.innerHTML = html;
-
-        // కొత్త కార్డ్‌కి flip / slide animation autoగా run అవుతుంది
-        // ఎందుకంటే CSS లో .news-card కి animation set చేశాం
-    } catch (err) {
-        console.error(err);
-        newsRoot.innerHTML = `
-            <div class="news-card">
-                <div class="news-body">
-                    <h2 class="news-title">న్యూస్ లోడ్ కాలేదు</h2>
-                    <p class="news-summary">
-                        నెట్ కనెక్షన్ చెక్ చేసి, మళ్లీ కొంచెం సేపటి తర్వాత ప్రయత్నించండి.
-                    </p>
-                </div>
-            </div>
-        `;
-    } finally {
-        isLoading = false;
-    }
-}
-
-function setupSwipe() {
     let startY = null;
-    const SWIPE_THRESHOLD = 40;
+    let isTouch = false;
 
-    document.addEventListener("touchstart", (e) => {
-        if (e.touches.length === 1) {
-            startY = e.touches[0].clientY;
-        }
-    });
+    element.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length !== 1) return;
+        isTouch = true;
+        startY = e.touches[0].clientY;
+      },
+      { passive: true }
+    );
 
-    document.addEventListener("touchend", (e) => {
-        if (startY === null) return;
+    element.addEventListener(
+      "touchend",
+      (e) => {
+        if (!isTouch || startY === null) return;
         const endY = e.changedTouches[0].clientY;
-        const deltaY = startY - endY;
+        const diff = startY - endY;
 
-        if (deltaY > SWIPE_THRESHOLD) {
-            // swipe up -> next
-            loadNews("next");
-        } else if (deltaY < -SWIPE_THRESHOLD) {
-            // swipe down -> previous
-            loadNews("prev");
+        if (Math.abs(diff) > MIN_DISTANCE) {
+          if (diff > 0) {
+            callback("next");
+          } else {
+            callback("prev");
+          }
         }
 
         startY = null;
-    });
+        isTouch = false;
+      },
+      { passive: true }
+    );
 
-    // Mouse wheel support (mobile కాకుండా for testing)
-    let wheelTimeout;
-    window.addEventListener("wheel", (e) => {
-        clearTimeout(wheelTimeout);
-        wheelTimeout = setTimeout(() => {
-            if (e.deltaY > 0) {
-                loadNews("next");
-            } else if (e.deltaY < 0) {
-                loadNews("prev");
-            }
-        }, 60);
-    });
-}
+    // Optional: mouse wheel for desktop
+    element.addEventListener(
+      "wheel",
+      (e) => {
+        if (Math.abs(e.deltaY) < 20) return;
+        if (e.deltaY > 0) {
+          callback("next");
+        } else {
+          callback("prev");
+        }
+      },
+      { passive: true }
+    );
+  }
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadNews();      // మొదటి న్యూస్
-    setupSwipe();    // swipe handlers
-});
+  return {
+    setupSwipe,
+  };
+})();
