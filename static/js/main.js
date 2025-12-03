@@ -1,28 +1,29 @@
 // static/js/main.js
-
 import { fetchNews } from "./api.js";
-import { setCurrentNews, setLoading } from "./state.js";
-import { renderLoading, renderNews, renderError } from "./render.js";
+import { renderNews, setLoading } from "./render.js";
 import { initSwipe } from "./swipe.js";
 import { initLikes } from "./likes.js";
 import { initComments } from "./comments.js";
 
-window.addEventListener("DOMContentLoaded", async () => {
+async function loadInitialNews() {
   setLoading(true);
-  renderLoading();
+  const item = await fetchNews(null);
+  renderNews(item);
+}
 
-  try {
-    const news = await fetchNews("current");
-    setCurrentNews(news);
-    renderNews(news);
-  } catch (err) {
-    console.error(err);
-    renderError("సర్వర్ నుండి న్యూస్ రాలేదు.");
-  } finally {
-    setLoading(false);
-  }
+async function loadNews(direction) {
+  setLoading(true);
+  const item = await fetchNews(direction);
+  renderNews(item);
+}
 
-  initSwipe();
+document.addEventListener("DOMContentLoaded", () => {
+  // swipe: పైకి → next, కిందకి → prev
+  initSwipe((direction) => {
+    loadNews(direction);
+  });
+
   initLikes();
   initComments();
+  loadInitialNews();
 });
