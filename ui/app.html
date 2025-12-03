@@ -65,6 +65,55 @@
       </main>
     </div>
 
-    <script type="module" src="/static/js/main.js"></script>
+    <!-- INLINE FALLBACK: చూపించడానికి ఒకటి మాత్రమే (first item) — modules నడచినపుడే ఇది harmless -->
+    <script>
+      (async function () {
+        try {
+          // small timeout to allow module load to start first — if module runs it'll override
+          await new Promise((r) => setTimeout(r, 250));
+          // if main module already set content, we shouldn't overwrite — check title text
+          const titleEl = document.getElementById("news-title");
+          if (!titleEl || (titleEl && titleEl.dataset && titleEl.dataset.rendered === "1")) {
+            // module already rendered — don't run fallback
+            return;
+          }
+
+          const res = await fetch("/news");
+          if (!res.ok) throw new Error("Fetch /news failed: " + res.status);
+          const data = await res.json();
+          const items = data.items || [];
+          if (!items.length) return;
+
+          const it = items[0];
+          if (titleEl) {
+            titleEl.textContent = it.title || "టైటిల్ లేదు";
+            // mark as rendered by fallback (so module won't overwrite check)
+            titleEl.dataset.rendered = "fallback";
+          }
+          const summaryEl = document.getElementById("news-summary");
+          if (summaryEl) summaryEl.textContent = it.summary || it.raw_summary || "";
+
+          const moreBtn = document.getElementById("more-info-btn");
+          if (moreBtn) {
+            moreBtn.onclick = function () {
+              if (it.link) window.open(it.link, "_blank");
+            };
+          }
+
+          const likeCount = document.getElementById("like-count");
+          const dislikeCount = document.getElementById("dislike-count");
+          if (likeCount) likeCount.textContent = it.likes ?? 0;
+          if (dislikeCount) dislikeCount.textContent = it.dislikes ?? 0;
+
+          console.log("Fallback: rendered first news item id=", it.id);
+        } catch (err) {
+          // don't break page if fetch blocked
+          console.warn("Fallback render failed:", err);
+        }
+      })();
+    </script>
+
+    <!-- main module with cache-bust (bump ?v on deploy) -->
+    <script type="module" src="/static/js/main.js?v=20241204T1500"></script>
   </body>
 </html>
