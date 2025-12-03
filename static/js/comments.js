@@ -1,28 +1,23 @@
 // static/js/comments.js
 
-import { getCurrentNewsId } from "./state.js";
-import { sendComment } from "./api.js";
-
-const commentInput = document.getElementById("comment-input");
-const commentButton = document.getElementById("comment-button");
-
 export function initComments() {
-  if (!commentInput || !commentButton) return;
+  const input = document.getElementById("comment-input");
+  const button = document.getElementById("comment-submit");
+  const note = document.getElementById("comment-note");
 
-  commentButton.addEventListener("click", onSubmit);
-}
-
-async function onSubmit() {
-  const text = commentInput.value.trim();
-  const newsId = getCurrentNewsId();
-
-  if (!text || !newsId) return;
-
-  try {
-    await sendComment(newsId, text);
-    commentInput.value = "";
-    // Future: UI లో “comment saved” toast వంటిది చూపించవచ్చు
-  } catch (err) {
-    console.error("Failed to send comment:", err);
+  if (!input || !button) {
+    console.warn("initComments: elements missing");
+    return;
   }
+
+  button.addEventListener("click", () => {
+    const text = input.value.trim();
+    if (!text) return;
+
+    // For now, just clear and show small note. Later → call API.
+    input.value = "";
+    if (note) {
+      note.textContent = "కామెంట్ సేవ్ చేయబడింది (డెవలప్‌మెంట్ మోడ్).";
+    }
+  });
 }
