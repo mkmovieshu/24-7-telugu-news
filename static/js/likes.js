@@ -1,45 +1,48 @@
 // static/js/likes.js
-import { sendReaction } from "./api.js";
-import { getCurrentNewsId } from "./render.js";
+// Like / Dislike buttons
 
-export function initLikes() {
+window.setupLikeButtons = function setupLikeButtons() {
   const likeBtn = document.getElementById("like-btn");
   const dislikeBtn = document.getElementById("dislike-btn");
   const likeCountEl = document.getElementById("like-count");
   const dislikeCountEl = document.getElementById("dislike-count");
 
-  if (!likeBtn || !dislikeBtn) {
-    console.warn("initLikes: buttons missing");
-    return;
-  }
+  if (!likeBtn || !dislikeBtn) return;
 
-  likeBtn.addEventListener("click", async () => {
-    const newsId = getCurrentNewsId();
+  likeBtn.onclick = async () => {
+    const item = window.getCurrentNews();
+    if (!item) return;
+
+    const newsId = item.id || item._id;
     if (!newsId) return;
 
-    const result = await sendReaction(newsId, "like");
-    if (result) {
-      if (typeof result.likes === "number") {
-        likeCountEl.textContent = String(result.likes);
-      }
-      if (typeof result.dislikes === "number") {
-        dislikeCountEl.textContent = String(result.dislikes);
-      }
+    try {
+      await window.sendReaction(newsId, "like");
+      const current = Number(likeCountEl?.textContent || "0") + 1;
+      if (likeCountEl) likeCountEl.textContent = String(current);
+      likeBtn.classList.add("active-like");
+      dislikeBtn.classList.remove("active-dislike");
+    } catch (e) {
+      console.error(e);
+      alert("లైక్ నమోదు కాలేదు. కొంచెం తర్వాత మళ్లీ ప్రయత్నించండి.");
     }
-  });
+  };
 
-  dislikeBtn.addEventListener("click", async () => {
-    const newsId = getCurrentNewsId();
+  dislikeBtn.onclick = async () => {
+    const item = window.getCurrentNews();
+    if (!item) return;
+    const newsId = item.id || item._id;
     if (!newsId) return;
 
-    const result = await sendReaction(newsId, "dislike");
-    if (result) {
-      if (typeof result.likes === "number") {
-        likeCountEl.textContent = String(result.likes);
-      }
-      if (typeof result.dislikes === "number") {
-        dislikeCountEl.textContent = String(result.dislikes);
-      }
+    try {
+      await window.sendReaction(newsId, "dislike");
+      const current = Number(dislikeCountEl?.textContent || "0") + 1;
+      if (dislikeCountEl) dislikeCountEl.textContent = String(current);
+      dislikeBtn.classList.add("active-dislike");
+      likeBtn.classList.remove("active-like");
+    } catch (e) {
+      console.error(e);
+      alert("డిస్‌లైక్ నమోదు కాలేదు. కొంచెం తర్వాత మళ్లీ ప్రయత్నించండి.");
     }
-  });
-}
+  };
+};
