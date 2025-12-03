@@ -1,6 +1,8 @@
-<!-- ===== Inline swipe + render script (paste before closing </body>) ===== -->
 <script>
 (function () {
+  if (window._newsInlineAttached) return;
+  window._newsInlineAttached = true;
+
   // CONFIG
   const NEWS_API = "/news?limit=100";
   const SWIPE_THRESHOLD = 40; // pixels
@@ -10,7 +12,7 @@
   let newsItems = [];
   let index = 0;
 
-  // DOM refs
+  // DOM refs (must exist in the page)
   const card = document.getElementById("news-card");
   const titleEl = document.getElementById("news-title");
   const summaryEl = document.getElementById("news-summary");
@@ -27,7 +29,7 @@
   function setFallback() {
     titleEl.textContent = "టైటిల్ లేదు";
     summaryEl.textContent = "న్యూస్ లోడ్ అవుతుంది...";
-    moreBtn.onclick = null;
+    if (moreBtn) moreBtn.onclick = null;
     if (likeCountEl) likeCountEl.textContent = "0";
     if (dislikeCountEl) dislikeCountEl.textContent = "0";
     card.dataset.id = "";
@@ -42,14 +44,10 @@
 
     // animation classes controlled here
     card.classList.remove("slide-up", "slide-down");
-    // force reflow to restart animation
-    void card.offsetWidth;
+    void card.offsetWidth; // force reflow
 
-    if (direction === "next") {
-      card.classList.add("slide-up");
-    } else if (direction === "prev") {
-      card.classList.add("slide-down");
-    }
+    if (direction === "next") card.classList.add("slide-up");
+    else if (direction === "prev") card.classList.add("slide-down");
 
     titleEl.textContent = item.title || "టైటిల్ లేదు";
     summaryEl.textContent = item.summary || item.raw_summary || "";
@@ -61,15 +59,19 @@
     if (likeCountEl) likeCountEl.textContent = item.likes ?? 0;
     if (dislikeCountEl) dislikeCountEl.textContent = item.dislikes ?? 0;
     card.dataset.id = item.id || "";
+
+    console.log("rendered index:", indexToRender, "id:", item.id);
   }
 
   // FETCH data
   async function loadNews() {
     try {
+      console.log("loading news from", NEWS_API);
       const res = await fetch(NEWS_API);
       if (!res.ok) throw new Error("Fetch failed: " + res.status);
       const json = await res.json();
       newsItems = (json.items && Array.isArray(json.items)) ? json.items : [];
+      console.log("newsItems count:", newsItems.length);
       if (!newsItems.length) {
         setFallback();
         return;
@@ -135,16 +137,13 @@
     const dy = startY - endY;
     const dx = startX - endX;
 
-    // ignore horizontal drags
     if (lockedDirection === "horizontal") { lockedDirection = null; return; }
 
     if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_THRESHOLD) {
       if (dy > 0) {
-        // swipe up -> next
         const newIndex = moveNext();
         render(newIndex, "next");
       } else {
-        // swipe down -> prev
         const newIndex = movePrev();
         render(newIndex, "prev");
       }
@@ -152,21 +151,26 @@
     lockedDirection = null;
   }
 
-  // Attach touch + mouse listeners
-  card.addEventListener("touchstart", onStart, { passive: true });
-  card.addEventListener("touchmove", onMove, { passive: false });
-  card.addEventListener("touchend", onEnd, { passive: true });
+  // Attach touch + mouse listeners safely
+  try {
+    card.addEventListener("touchstart", onStart, { passive: true });
+    card.addEventListener("touchmove", onMove, { passive: false });
+    card.addEventListener("touchend", onEnd, { passive: true });
 
-  // mouse fallback for desktop testing
-  let mouseDown = false;
-  card.addEventListener("mousedown", function (e) { mouseDown = true; onStart(e); });
-  window.addEventListener("mousemove", function (e) { if (mouseDown) onMove(e); });
-  window.addEventListener("mouseup", function (e) { if (mouseDown) { mouseDown = false; onEnd(e); } });
+    // mouse fallback
+    let mouseDown = false;
+    card.addEventListener("mousedown", function (e) { mouseDown = true; onStart(e); });
+    window.addEventListener("mousemove", function (e) { if (mouseDown) onMove(e); });
+    window.addEventListener("mouseup", function (e) { if (mouseDown) { mouseDown = false; onEnd(e); } });
+    console.log("swipe listeners attached");
+  } catch (err) {
+    console.warn("swipe listeners attach failed", err);
+  }
 
   // init
   loadNews();
 
-  // expose for debugging (optional)
+  // expose for debugging
   window._newsInline = {
     items: () => newsItems,
     idx: () => index,
@@ -176,4 +180,3 @@
 
 })();
 </script>
-<!-- ===== end inline swipe script ===== -->
