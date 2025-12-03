@@ -1,73 +1,70 @@
-// static/js/render.js
-// Renders a news item into the card
+import { getCurrentNews } from "./state.js";
 
-window.renderNewsCard = function renderNewsCard(item) {
-  const card = document.getElementById("news-card");
-  if (!card) return;
+const cardEl = document.getElementById("news-card");
+const titleEl = document.getElementById("news-title");
+const summaryEl = document.getElementById("news-summary");
+const moreBtn = document.getElementById("more-info-btn");
 
-  const titleEl =
-    card.querySelector(".news-title") ||
-    document.getElementById("news-title");
-  const summaryEl =
-    card.querySelector(".news-summary") ||
-    document.getElementById("news-summary");
-  const moreBtn = document.getElementById("more-info-btn");
-  const likeCountEl = document.getElementById("like-count");
-  const dislikeCountEl = document.getElementById("dislike-count");
+const likeCountEl = document.getElementById("like-count");
+const dislikeCountEl = document.getElementById("dislike-count");
 
+function setFallback() {
+  titleEl.textContent = "టైటిల్ లేదు";
+  summaryEl.textContent = "ఈ వార్తకు సమరీ అందుబాటులో లేదు.";
+  moreBtn.onclick = null;
+  likeCountEl.textContent = "0";
+  dislikeCountEl.textContent = "0";
+  cardEl.dataset.id = "";
+}
+
+/**
+ * direction: "initial" | "next" | "prev"
+ */
+export function renderNewsCard(item, direction = "initial") {
   if (!item) {
-    if (titleEl) titleEl.textContent = "Loading...";
-    if (summaryEl) summaryEl.textContent = "న్యూస్ లోడ్ అవుతోంది...";
-    card.dataset.newsId = "";
-    if (moreBtn) moreBtn.style.display = "none";
-    if (likeCountEl) likeCountEl.textContent = "0";
-    if (dislikeCountEl) dislikeCountEl.textContent = "0";
+    setFallback();
     return;
   }
 
-  // save current id on card so likes/comments use it
-  if (item.id) {
-    card.dataset.newsId = item.id;
-  } else if (item._id) {
-    // just in case API returns _id
-    card.dataset.newsId = item._id;
-  } else {
-    card.dataset.newsId = "";
+  // animation classes
+  cardEl.classList.remove("slide-up", "slide-down");
+  // force reflow
+  void cardEl.offsetWidth;
+
+  if (direction === "next") {
+    cardEl.classList.add("slide-up");
+  } else if (direction === "prev") {
+    cardEl.classList.add("slide-down");
   }
 
-  const title = item.title || "టైటిల్ లేదు";
-  const summary =
-    item.summary || item.raw_summary || "ఈ వార్తకు సమరీ అందుబాటులో లేదు.";
+  titleEl.textContent = item.title || "టైటిల్ లేదు";
+  summaryEl.textContent =
+    item.summary || "ఈ వార్తకు సమరీ అందుబాటులో లేదు.";
 
-  if (titleEl) titleEl.textContent = title;
-  if (summaryEl) summaryEl.textContent = summary;
+  likeCountEl.textContent = item.likes ?? 0;
+  dislikeCountEl.textContent = item.dislikes ?? 0;
 
-  if (moreBtn) {
+  cardEl.dataset.id = item.id || "";
+
+  moreBtn.onclick = () => {
     if (item.link) {
-      moreBtn.style.display = "block";
-      moreBtn.onclick = () => {
-        window.open(item.link, "_blank", "noopener");
-      };
-    } else {
-      moreBtn.style.display = "none";
-      moreBtn.onclick = null;
+      window.open(item.link, "_blank");
     }
+  };
+}
+
+// external helper – లైక్స్ అప్డేట్ కోసం
+export function updateReactions(likes, dislikes) {
+  likeCountEl.textContent = likes ?? likeCountEl.textContent;
+  dislikeCountEl.textContent = dislikes ?? dislikeCountEl.textContent;
+}
+
+// initial loading fallback
+export function renderInitialLoading() {
+  const current = getCurrentNews();
+  if (!current) {
+    setFallback();
+  } else {
+    renderNewsCard(current, "initial");
   }
-
-  if (likeCountEl) likeCountEl.textContent = String(item.likes ?? 0);
-  if (dislikeCountEl) dislikeCountEl.textContent = String(item.dislikes ?? 0);
-};
-
-window.showNewsError = function showNewsError(message) {
-  const card = document.getElementById("news-card");
-  if (!card) return;
-  const titleEl =
-    card.querySelector(".news-title") ||
-    document.getElementById("news-title");
-  const summaryEl =
-    card.querySelector(".news-summary") ||
-    document.getElementById("news-summary");
-
-  if (titleEl) titleEl.textContent = "లోపం వచ్చింది";
-  if (summaryEl) summaryEl.textContent = message || "కొంచెం తర్వాత మళ్లీ ప్రయత్నించండి.";
-};
+}
