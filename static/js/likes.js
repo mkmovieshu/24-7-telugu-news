@@ -1,37 +1,42 @@
-// Like / Dislike behaviour with local immediate update
+// static/js/likes.js
 
-(function () {
-  const likeBtn = document.getElementById("like-btn");
-  const dislikeBtn = document.getElementById("dislike-btn");
-  const likeCountEl = document.getElementById("like-count");
-  const dislikeCountEl = document.getElementById("dislike-count");
+import { getCurrentNewsId, setCurrentNews } from "./state.js";
+import { sendReaction } from "./api.js";
+import { renderReactions } from "./render.js";
 
-  function updateButtonStates(active) {
-    likeBtn.classList.toggle("active", active === "like");
-    dislikeBtn.classList.toggle("active", active === "dislike");
+const likeBtn = document.getElementById("like-button");
+const dislikeBtn = document.getElementById("dislike-button");
+
+export function initLikes() {
+  if (!likeBtn || !dislikeBtn) return;
+
+  likeBtn.addEventListener("click", () => handleReaction("like"));
+  dislikeBtn.addEventListener("click", () => handleReaction("dislike"));
+}
+
+async function handleReaction(type) {
+  const newsId = getCurrentNewsId();
+
+  if (!newsId) {
+    console.warn("No current news id – reaction skipped");
+    return;
   }
 
-  async function handleReaction(type) {
-    const id = (type === "like" ? likeBtn : dislikeBtn).dataset.id;
-    if (!id) return;
+  try {
+    // backend updated news object return చేస్తుందని assume
+    const updatedNews = await sendReaction(newsId, type);
+    setCurrentNews(updatedNews);
+    renderReactions(updatedNews);
 
-    const likeCount = parseInt(likeCountEl.textContent || "0", 10);
-    const dislikeCount = parseInt(dislikeCountEl.textContent || "0", 10);
-
+    // యాక్టివ్ బటన్ కలర్ సెట్ చేయడం (css తో) – ఒక్కసారి క్లిక్ చేసినంత వరకే
     if (type === "like") {
-      likeCountEl.textContent = likeCount + 1;
-      updateButtonStates("like");
+      likeBtn.classList.add("active");
+      dislikeBtn.classList.remove("active");
     } else {
-      dislikeCountEl.textContent = dislikeCount + 1;
-      updateButtonStates("dislike");
+      dislikeBtn.classList.add("active");
+      likeBtn.classList.remove("active");
     }
-
-    // fire-and-forget backend call (if implemented)
-    Api.sendReaction(id, type).catch(() => {});
+  } catch (err) {
+    console.error("Reaction failed:", err);
   }
-
-  if (likeBtn && dislikeBtn) {
-    likeBtn.addEventListener("click", () => handleReaction("like"));
-    dislikeBtn.addEventListener("click", () => handleReaction("dislike"));
-  }
-})();
+}
