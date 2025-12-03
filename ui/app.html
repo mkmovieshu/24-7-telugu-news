@@ -1,119 +1,179 @@
-<!DOCTYPE html>
-<html lang="te">
-  <head>
-    <meta charset="UTF-8" />
-    <title>24/7 Telugu Short News</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/static/css/app.css" />
-  </head>
-  <body>
-    <div class="app-container">
-      <header class="app-header">
-        <div class="app-logo"></div>
-        <div class="app-title-block">
-          <div class="app-title">24/7 Telugu Short News</div>
-          <div class="app-subtitle">స్వైప్ చేసి ఒక్కొక్క న్యూస్ చూడండి</div>
-        </div>
-      </header>
+<!-- ===== Inline swipe + render script (paste before closing </body>) ===== -->
+<script>
+(function () {
+  // CONFIG
+  const NEWS_API = "/news?limit=100";
+  const SWIPE_THRESHOLD = 40; // pixels
+  const DIRECTION_LOCK_THRESHOLD = 12;
 
-      <main>
-        <section id="news-card" class="news-card">
-          <h1 id="news-title" class="news-title">టైటిల్ లేదు</h1>
-          <p id="news-summary" class="news-summary">
-            న్యూస్ లోడ్ అవుతుంది...
-          </p>
-        </section>
+  // STATE
+  let newsItems = [];
+  let index = 0;
 
-        <div class="more-info-wrapper">
-          <button id="more-info-btn" class="more-info-btn">
-            మరింత సమాచారం
-          </button>
-        </div>
+  // DOM refs
+  const card = document.getElementById("news-card");
+  const titleEl = document.getElementById("news-title");
+  const summaryEl = document.getElementById("news-summary");
+  const moreBtn = document.getElementById("more-info-btn");
+  const likeCountEl = document.getElementById("like-count");
+  const dislikeCountEl = document.getElementById("dislike-count");
 
-        <div class="reactions-row">
-          <button id="like-btn" class="reaction-btn">
-            <span>👍</span>
-            <span id="like-count" class="count">0</span>
-          </button>
-          <button id="dislike-btn" class="reaction-btn">
-            <span>👎</span>
-            <span id="dislike-count" class="count">0</span>
-          </button>
-        </div>
+  if (!card || !titleEl || !summaryEl) {
+    console.warn("Inline swipe script: required DOM elements missing");
+    return;
+  }
 
-        <p class="comments-helper">
-          టెక్స్ట్ కోసం మాత్రమే – మీ కామెంట్ ఈ ఫోన్‌లోనే సేవ్ అవుతుంది.
-        </p>
+  // RENDER helpers
+  function setFallback() {
+    titleEl.textContent = "టైటిల్ లేదు";
+    summaryEl.textContent = "న్యూస్ లోడ్ అవుతుంది...";
+    moreBtn.onclick = null;
+    if (likeCountEl) likeCountEl.textContent = "0";
+    if (dislikeCountEl) dislikeCountEl.textContent = "0";
+    card.dataset.id = "";
+  }
 
-        <input
-          id="comment-text"
-          type="text"
-          class="comment-input"
-          placeholder="మీకు ఈ న్యూస్ ఎలా అనిపించింది?"
-        />
+  function render(indexToRender, direction = "initial") {
+    const item = newsItems[indexToRender];
+    if (!item) {
+      setFallback();
+      return;
+    }
 
-        <button id="save-comment-btn" class="comment-save-btn">
-          కామెంట్ సేవ్ చేయు
-        </button>
+    // animation classes controlled here
+    card.classList.remove("slide-up", "slide-down");
+    // force reflow to restart animation
+    void card.offsetWidth;
 
-        <ul id="comments-list" class="comments-list"></ul>
+    if (direction === "next") {
+      card.classList.add("slide-up");
+    } else if (direction === "prev") {
+      card.classList.add("slide-down");
+    }
 
-        <footer class="app-footer">
-          జైల్ న్యూస్ చూడండి 👉 తాజా న్యూస్<br />
-          పాత న్యూస్ చూడండి 👉 ప్రీవియస్ న్యూస్
-        </footer>
-      </main>
-    </div>
+    titleEl.textContent = item.title || "టైటిల్ లేదు";
+    summaryEl.textContent = item.summary || item.raw_summary || "";
+    if (moreBtn) {
+      moreBtn.onclick = function () {
+        if (item.link) window.open(item.link, "_blank");
+      };
+    }
+    if (likeCountEl) likeCountEl.textContent = item.likes ?? 0;
+    if (dislikeCountEl) dislikeCountEl.textContent = item.dislikes ?? 0;
+    card.dataset.id = item.id || "";
+  }
 
-    <!-- INLINE FALLBACK: చూపించడానికి ఒకటి మాత్రమే (first item) — modules నడచినపుడే ఇది harmless -->
-    <script>
-      (async function () {
-        try {
-          // small timeout to allow module load to start first — if module runs it'll override
-          await new Promise((r) => setTimeout(r, 250));
-          // if main module already set content, we shouldn't overwrite — check title text
-          const titleEl = document.getElementById("news-title");
-          if (!titleEl || (titleEl && titleEl.dataset && titleEl.dataset.rendered === "1")) {
-            // module already rendered — don't run fallback
-            return;
-          }
+  // FETCH data
+  async function loadNews() {
+    try {
+      const res = await fetch(NEWS_API);
+      if (!res.ok) throw new Error("Fetch failed: " + res.status);
+      const json = await res.json();
+      newsItems = (json.items && Array.isArray(json.items)) ? json.items : [];
+      if (!newsItems.length) {
+        setFallback();
+        return;
+      }
+      index = 0;
+      render(index, "initial");
+    } catch (err) {
+      console.error("loadNews error:", err);
+      setFallback();
+    }
+  }
 
-          const res = await fetch("/news");
-          if (!res.ok) throw new Error("Fetch /news failed: " + res.status);
-          const data = await res.json();
-          const items = data.items || [];
-          if (!items.length) return;
+  // NAV helpers
+  function moveNext() {
+    if (!newsItems.length) return null;
+    if (index < newsItems.length - 1) index += 1;
+    return index;
+  }
+  function movePrev() {
+    if (!newsItems.length) return null;
+    if (index > 0) index -= 1;
+    return index;
+  }
 
-          const it = items[0];
-          if (titleEl) {
-            titleEl.textContent = it.title || "టైటిల్ లేదు";
-            // mark as rendered by fallback (so module won't overwrite check)
-            titleEl.dataset.rendered = "fallback";
-          }
-          const summaryEl = document.getElementById("news-summary");
-          if (summaryEl) summaryEl.textContent = it.summary || it.raw_summary || "";
+  // SWIPE HANDLERS (vertical)
+  let startX = 0, startY = 0, lastX = 0, lastY = 0;
+  let tracking = false;
+  let lockedDirection = null;
 
-          const moreBtn = document.getElementById("more-info-btn");
-          if (moreBtn) {
-            moreBtn.onclick = function () {
-              if (it.link) window.open(it.link, "_blank");
-            };
-          }
+  function onStart(e) {
+    tracking = true;
+    lockedDirection = null;
+    const p = (e.touches && e.touches[0]) || e;
+    startX = lastX = p.clientX;
+    startY = lastY = p.clientY;
+  }
 
-          const likeCount = document.getElementById("like-count");
-          const dislikeCount = document.getElementById("dislike-count");
-          if (likeCount) likeCount.textContent = it.likes ?? 0;
-          if (dislikeCount) dislikeCount.textContent = it.dislikes ?? 0;
+  function onMove(e) {
+    if (!tracking) return;
+    const p = (e.touches && e.touches[0]) || e;
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
 
-          console.log("Fallback: rendered first news item id=", it.id);
-        } catch (err) {
-          // don't break page if fetch blocked
-          console.warn("Fallback render failed:", err);
-        }
-      })();
-    </script>
+    if (!lockedDirection) {
+      if (Math.abs(dy) > DIRECTION_LOCK_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+        lockedDirection = "vertical";
+        try { e.preventDefault(); } catch (_) {}
+      } else if (Math.abs(dx) > DIRECTION_LOCK_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+        lockedDirection = "horizontal";
+      }
+    } else if (lockedDirection === "vertical") {
+      try { e.preventDefault(); } catch (_) {}
+    }
+    lastX = p.clientX; lastY = p.clientY;
+  }
 
-    <!-- main module with cache-bust (bump ?v on deploy) -->
-    <script type="module" src="/static/js/main.js?v=20241204T1500"></script>
-  </body>
-</html>
+  function onEnd(e) {
+    if (!tracking) return;
+    tracking = false;
+    const changed = (e.changedTouches && e.changedTouches[0]) || {};
+    const endX = changed.clientX || (e.clientX || lastX);
+    const endY = changed.clientY || (e.clientY || lastY);
+    const dy = startY - endY;
+    const dx = startX - endX;
+
+    // ignore horizontal drags
+    if (lockedDirection === "horizontal") { lockedDirection = null; return; }
+
+    if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_THRESHOLD) {
+      if (dy > 0) {
+        // swipe up -> next
+        const newIndex = moveNext();
+        render(newIndex, "next");
+      } else {
+        // swipe down -> prev
+        const newIndex = movePrev();
+        render(newIndex, "prev");
+      }
+    }
+    lockedDirection = null;
+  }
+
+  // Attach touch + mouse listeners
+  card.addEventListener("touchstart", onStart, { passive: true });
+  card.addEventListener("touchmove", onMove, { passive: false });
+  card.addEventListener("touchend", onEnd, { passive: true });
+
+  // mouse fallback for desktop testing
+  let mouseDown = false;
+  card.addEventListener("mousedown", function (e) { mouseDown = true; onStart(e); });
+  window.addEventListener("mousemove", function (e) { if (mouseDown) onMove(e); });
+  window.addEventListener("mouseup", function (e) { if (mouseDown) { mouseDown = false; onEnd(e); } });
+
+  // init
+  loadNews();
+
+  // expose for debugging (optional)
+  window._newsInline = {
+    items: () => newsItems,
+    idx: () => index,
+    next: () => { moveNext(); render(index, "next"); },
+    prev: () => { movePrev(); render(index, "prev"); },
+  };
+
+})();
+</script>
+<!-- ===== end inline swipe script ===== -->
