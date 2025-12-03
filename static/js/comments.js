@@ -1,36 +1,28 @@
-// "Fake" comments – only saved locally on device
+// static/js/comments.js
 
-(function () {
-  const input = document.getElementById("comment-input");
-  const btn = document.getElementById("comment-save-btn");
-  const statusEl = document.getElementById("comment-status");
+import { getCurrentNewsId } from "./state.js";
+import { sendComment } from "./api.js";
 
-  function showStatus(text) {
-    statusEl.textContent = text;
-    if (!text) return;
-    setTimeout(() => {
-      statusEl.textContent = "";
-    }, 2000);
+const commentInput = document.getElementById("comment-input");
+const commentButton = document.getElementById("comment-button");
+
+export function initComments() {
+  if (!commentInput || !commentButton) return;
+
+  commentButton.addEventListener("click", onSubmit);
+}
+
+async function onSubmit() {
+  const text = commentInput.value.trim();
+  const newsId = getCurrentNewsId();
+
+  if (!text || !newsId) return;
+
+  try {
+    await sendComment(newsId, text);
+    commentInput.value = "";
+    // Future: UI లో “comment saved” toast వంటిది చూపించవచ్చు
+  } catch (err) {
+    console.error("Failed to send comment:", err);
   }
-
-  async function handleSave() {
-    const id = input.dataset.id;
-    const text = (input.value || "").trim();
-    if (!id || !text) {
-      showStatus("కామెంట్ టైప్ చేయండి.");
-      return;
-    }
-
-    try {
-      await Api.saveCommentLocally(id, text);
-      input.value = "";
-      showStatus("కామెంట్ ఈ ఫోన్లో సేవ్ అయింది.");
-    } catch {
-      showStatus("కామెంట్ సేవ్ కాలేదు.");
-    }
-  }
-
-  if (btn && input) {
-    btn.addEventListener("click", handleSave);
-  }
-})();
+}
