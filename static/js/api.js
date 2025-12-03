@@ -1,50 +1,39 @@
-// static/js/api.js
-// All API calls in one place
+// Backend API helpers
 
-const API_BASE = ""; // same origin
-
-async function apiRequest(path, options = {}) {
-  const url = `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
-
+export async function fetchNewsList() {
+  const res = await fetch("/news");
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`API ${path} failed: ${res.status} ${text}`);
+    throw new Error("Failed to load news");
   }
-
-  return res.headers.get("content-type")?.includes("application/json")
-    ? res.json()
-    : res.text();
+  const data = await res.json();
+  return data.items || [];
 }
 
-// --- public functions ---
-
-window.fetchNewsItem = async function fetchNewsItem(direction) {
-  // direction: undefined | "next" | "prev"
-  const query = direction ? `?direction=${encodeURIComponent(direction)}` : "";
-  return apiRequest(`/news${query}`);
-};
-
-window.sendReaction = async function sendReaction(newsId, reaction) {
-  if (!newsId) return;
-
-  return apiRequest(`/news/${encodeURIComponent(newsId)}/reaction`, {
+export async function sendReaction(newsId, action) {
+  const res = await fetch(`/news/${newsId}/reaction`, {
     method: "POST",
-    body: JSON.stringify({ reaction }), // "like" | "dislike"
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
   });
-};
+  if (!res.ok) {
+    throw new Error("Reaction failed");
+  }
+  return await res.json();
+}
 
-window.sendComment = async function sendComment(newsId, text) {
-  if (!newsId || !text?.trim()) return;
+export async function fetchComments(newsId) {
+  const res = await fetch(`/news/${newsId}/comments`);
+  if (!res.ok) throw new Error("Failed to load comments");
+  const data = await res.json();
+  return data.items || [];
+}
 
-  return apiRequest(`/news/${encodeURIComponent(newsId)}/comment`, {
+export async function sendComment(newsId, text) {
+  const res = await fetch(`/news/${newsId}/comments`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
-};
+  if (!res.ok) throw new Error("Failed to save comment");
+  return await res.json();
+}
