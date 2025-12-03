@@ -7,6 +7,7 @@ from db import db
 
 app = FastAPI()
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
 # UI Templates directory (must match your folder name)
 templates = Jinja2Templates(directory="ui")
 
