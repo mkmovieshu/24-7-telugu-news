@@ -1,54 +1,54 @@
 // static/js/swipe.js
+// Basic vertical swipe detection with a smooth fade animation
 
-// Simple vertical swipe detector
-const SWIPE_THRESHOLD = 50; // px
-
-export function initSwipe(onSwipe) {
-  const card = document.getElementById("news-card");
-  if (!card) {
-    console.warn("initSwipe: #news-card not found");
-    return;
-  }
+window.attachSwipeHandlers = function attachSwipeHandlers(element, handlers) {
+  if (!element) return;
+  const { onNext, onPrev } = handlers || {};
 
   let startY = null;
-  let isTouch = false;
+  const threshold = 50; // pixels
 
-  card.addEventListener("touchstart", (e) => {
-    isTouch = true;
-    startY = e.touches[0].clientY;
-  });
+  element.addEventListener(
+    "touchstart",
+    (e) => {
+      const touch = e.touches[0];
+      startY = touch.clientY;
+    },
+    { passive: true }
+  );
 
-  card.addEventListener("touchend", (e) => {
-    if (!isTouch || startY === null) return;
-    const endY = e.changedTouches[0].clientY;
-    handleSwipe(startY, endY, onSwipe);
-    startY = null;
-  });
+  element.addEventListener(
+    "touchend",
+    (e) => {
+      if (startY === null) return;
+      const touch = e.changedTouches[0];
+      const deltaY = touch.clientY - startY;
 
-  // Optional: mouse swipe support (desktop)
-  card.addEventListener("mousedown", (e) => {
-    isTouch = false;
-    startY = e.clientY;
-  });
+      // small moves ignore
+      if (Math.abs(deltaY) < threshold) {
+        startY = null;
+        return;
+      }
 
-  card.addEventListener("mouseup", (e) => {
-    if (startY === null) return;
-    const endY = e.clientY;
-    handleSwipe(startY, endY, onSwipe);
-    startY = null;
-  });
-}
+      if (deltaY < 0 && typeof onNext === "function") {
+        // swipe up -> next news
+        animateCard(element, "up");
+        onNext();
+      } else if (deltaY > 0 && typeof onPrev === "function") {
+        // swipe down -> previous news
+        animateCard(element, "down");
+        onPrev();
+      }
 
-function handleSwipe(startY, endY, onSwipe) {
-  const diffY = startY - endY;
+      startY = null;
+    },
+    { passive: true }
+  );
+};
 
-  if (Math.abs(diffY) < SWIPE_THRESHOLD) return;
-
-  if (diffY > 0) {
-    // swipe UP → next
-    onSwipe("next");
-  } else {
-    // swipe DOWN → previous
-    onSwipe("prev");
-  }
+function animateCard(card, direction) {
+  if (!card) return;
+  card.classList.remove("swipe-up", "swipe-down");
+  void card.offsetWidth; // force reflow
+  card.classList.add(direction === "up" ? "swipe-up" : "swipe-down");
 }
