@@ -1,29 +1,32 @@
 // static/js/main.js
-import { fetchNews } from "./api.js";
-import { renderNews, setLoading } from "./render.js";
-import { initSwipe } from "./swipe.js";
-import { initLikes } from "./likes.js";
-import { initComments } from "./comments.js";
-
-async function loadInitialNews() {
-  setLoading(true);
-  const item = await fetchNews(null);
-  renderNews(item);
-}
+// Boots the whole UI – this is the brain
 
 async function loadNews(direction) {
-  setLoading(true);
-  const item = await fetchNews(direction);
-  renderNews(item);
+  try {
+    const item = await window.fetchNewsItem(direction);
+    window.setCurrentNews(item);
+    window.renderNewsCard(item);
+  } catch (err) {
+    console.error(err);
+    window.showNewsError("సమాచారం లోడ్ కాలేదు. కొంచెం తర్వాత మళ్లీ ప్రయత్నించండి.");
+  }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  // swipe: పైకి → next, కిందకి → prev
-  initSwipe((direction) => {
-    loadNews(direction);
+window.addEventListener("DOMContentLoaded", () => {
+  const card = document.getElementById("news-card");
+
+  // swipe (up -> next, down -> prev)
+  window.attachSwipeHandlers(card, {
+    onNext: () => loadNews("next"),
+    onPrev: () => loadNews("prev"),
   });
 
-  initLikes();
-  initComments();
-  loadInitialNews();
+  // like / dislike
+  window.setupLikeButtons();
+
+  // comments
+  window.setupComments();
+
+  // initial news
+  loadNews();
 });
