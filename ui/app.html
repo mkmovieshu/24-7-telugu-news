@@ -1,83 +1,70 @@
 <!DOCTYPE html>
 <html lang="te">
-<head>
-  <meta charset="UTF-8" />
-  <title>24/7 Telugu Short News</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <head>
+    <meta charset="UTF-8" />
+    <title>24/7 Telugu Short News</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <header class="app-header">
+        <div class="app-logo"></div>
+        <div class="app-title-block">
+          <div class="app-title">24/7 Telugu Short News</div>
+          <div class="app-subtitle">స్వైప్ చేసి ఒక్కొక్క న్యూస్ చూడండి</div>
+        </div>
+      </header>
 
-  <link rel="stylesheet" href="/static/css/app.css" />
-</head>
-<body>
-  <div class="app-root">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="app-icon"></div>
-      <div class="app-title-block">
-        <h1 class="app-title">24/7 Telugu Short News</h1>
-        <p class="app-subtitle">స్వైప్ చేస్తూ ఒకో న్యూస్ చూడండి</p>
-      </div>
-    </header>
-
-    <!-- Main content -->
-    <main class="app-main">
-      <div class="news-card-wrapper">
-        <article id="news-card" class="news-card">
-          <h2 id="news-title" class="news-title">Loading...</h2>
+      <main>
+        <section id="news-card" class="news-card">
+          <h1 id="news-title" class="news-title">టైటిల్ లేదు</h1>
           <p id="news-summary" class="news-summary">
-            న్యూస్ లోడ్ అవుతోంది...
+            న్యూస్ లోడ్ అవుతుంది...
           </p>
-        </article>
-      </div>
+        </section>
 
-      <!-- More info button -->
-      <a id="more-info-btn" class="btn primary-btn" href="#" target="_blank" rel="noopener">
-        మరింత సమాచారం
-      </a>
+        <div class="more-info-wrapper">
+          <button id="more-info-btn" class="more-info-btn">
+            మరింత సమాచారం
+          </button>
+        </div>
 
-      <!-- Like / Dislike -->
-      <div class="reaction-row">
-        <button id="like-btn" class="reaction-btn reaction-like">
-          <span class="reaction-icon">👍</span>
-          <span id="like-count" class="reaction-count">0</span>
-        </button>
-        <button id="dislike-btn" class="reaction-btn reaction-dislike">
-          <span class="reaction-icon">👎</span>
-          <span id="dislike-count" class="reaction-count">0</span>
-        </button>
-      </div>
+        <div class="reactions-row">
+          <button id="like-btn" class="reaction-btn">
+            <span>👍</span>
+            <span id="like-count" class="count">0</span>
+          </button>
+          <button id="dislike-btn" class="reaction-btn">
+            <span>👎</span>
+            <span id="dislike-count" class="count">0</span>
+          </button>
+        </div>
 
-      <!-- Comment box -->
-      <section class="comment-section">
-        <label for="comment-input" class="comment-label">
-          టెక్స్ట్ కోసం మాత్రమే - మీ కామెంట్ ఈ ఫోన్లోనే సేవ్ అవుతుంది.
-        </label>
-        <textarea
-          id="comment-input"
+        <p class="comments-helper">
+          టెక్స్ట్ కోసం మాత్రమే – మీ కామెంట్ ఈ ఫోన్‌లోనే సేవ్ అవుతుంది.
+        </p>
+
+        <input
+          id="comment-text"
+          type="text"
           class="comment-input"
-          rows="2"
           placeholder="మీకు ఈ న్యూస్ ఎలా అనిపించింది?"
-        ></textarea>
-        <button id="comment-save-btn" class="btn secondary-btn">
-          కామెంట్ సేవ్ చేయి
+        />
+
+        <button id="save-comment-btn" class="comment-save-btn">
+          కామెంట్ సేవ్ చేయు
         </button>
-        <p id="comment-status" class="comment-status"></p>
-      </section>
 
-      <p class="swipe-hint">
-        పైకి స్వైప్ చేయండి 👉 తర్వాతి న్యూస్  
-        <br />
-        కిందికి స్వైప్ చేయండి 👉 ప్రీవియస్ న్యూస్
-      </p>
-    </main>
-  </div>
+        <ul id="comments-list" class="comments-list"></ul>
 
-  <!-- Scripts (order important) -->
-  <script src="/static/js/api.js"></script>
-  <script src="/static/js/state.js"></script>
-  <script src="/static/js/render.js"></script>
-  <script src="/static/js/swipe.js"></script>
-  <script src="/static/js/likes.js"></script>
-  <script src="/static/js/comments.js"></script>
-  <script src="/static/js/main.js"></script>
-</body>
+        <footer class="app-footer">
+          జైల్ న్యూస్ చూడండి 👉 తాజా న్యూస్<br />
+          పాత న్యూస్ చూడండి 👉 ప్రీవియస్ న్యూస్
+        </footer>
+      </main>
+    </div>
+
+    <script type="module" src="/static/js/main.js"></script>
+  </body>
 </html>
