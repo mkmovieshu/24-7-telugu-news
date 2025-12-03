@@ -1,77 +1,63 @@
-// Rendering + animation logic for news card
+// static/js/render.js
 
-(function () {
-  function setCardContent(news) {
-    const titleEl = document.getElementById("news-title");
-    const summaryEl = document.getElementById("news-summary");
-    const moreInfoBtn = document.getElementById("more-info-btn");
-    const likeCountEl = document.getElementById("like-count");
-    const dislikeCountEl = document.getElementById("dislike-count");
+import { getLoading } from "./state.js";
 
-    titleEl.textContent = news.title || "";
-    summaryEl.textContent = news.summary || "";
+const cardEl = document.getElementById("news-card");
+const titleEl = document.getElementById("news-title");
+const summaryEl = document.getElementById("news-summary");
+const moreInfoBtn = document.getElementById("more-info-btn");
+const likeCountEl = document.getElementById("like-count");
+const dislikeCountEl = document.getElementById("dislike-count");
 
+// loading / error / news render
+
+export function renderLoading() {
+  if (!cardEl || !titleEl || !summaryEl) return;
+  cardEl.classList.add("loading");
+  titleEl.textContent = "Loading...";
+  summaryEl.textContent = "న్యూస్ లోడ్ అవుతోంది...";
+}
+
+export function renderError(message) {
+  if (!cardEl || !titleEl || !summaryEl) return;
+  cardEl.classList.remove("loading");
+  titleEl.textContent = "ఎర్రర్ వచ్చింది";
+  summaryEl.textContent = message || "న్యూస్ ని లోడ్ చేయలేకపోయాం.";
+}
+
+export function renderNews(news) {
+  if (!news || !cardEl || !titleEl || !summaryEl) return;
+
+  cardEl.classList.remove("loading");
+
+  // card కి id attach చేస్తాం – likes.js కి ఇదే life
+  cardEl.dataset.newsId = news.id || "";
+
+  titleEl.textContent = news.title || "";
+  summaryEl.textContent = news.summary || "";
+
+  if (moreInfoBtn) {
     if (news.link) {
       moreInfoBtn.href = news.link;
-      moreInfoBtn.style.display = "block";
+      moreInfoBtn.target = "_blank";
+      moreInfoBtn.rel = "noopener noreferrer";
+      moreInfoBtn.classList.remove("disabled");
     } else {
       moreInfoBtn.href = "#";
-      moreInfoBtn.style.display = "none";
+      moreInfoBtn.classList.add("disabled");
     }
-
-    likeCountEl.textContent = news.likes ?? 0;
-    dislikeCountEl.textContent = news.dislikes ?? 0;
-
-    // store id on buttons for reactions/comments
-    document.getElementById("like-btn").dataset.id = news.id;
-    document.getElementById("dislike-btn").dataset.id = news.id;
-    document.getElementById("comment-input").dataset.id = news.id;
   }
 
-  async function renderNews(news, direction) {
-    const card = document.getElementById("news-card");
-    if (!card) return;
+  renderReactions(news);
+}
 
-    if (!direction) {
-      // first render, no animation
-      setCardContent(news);
-      window.NewsState.current = news;
-      return;
-    }
-
-    if (window.NewsState.isAnimating) return;
-    window.NewsState.isAnimating = true;
-
-    const outClass =
-      direction === "next" ? "flip-out-up" : "flip-out-down";
-    const inClass = direction === "next" ? "flip-in-up" : "flip-in-down";
-
-    // Step 1: play flip-out
-    card.classList.remove("flip-in-up", "flip-in-down");
-    card.classList.add(outClass);
-
-    function onOutEnd(e) {
-      if (e.target !== card) return;
-      card.removeEventListener("animationend", onOutEnd);
-      card.classList.remove(outClass);
-
-      // Step 2: change content, then flip-in
-      setCardContent(news);
-      card.classList.add(inClass);
-
-      card.addEventListener("animationend", function onInEnd(ev) {
-        if (ev.target !== card) return;
-        card.removeEventListener("animationend", onInEnd);
-        card.classList.remove(inClass);
-        window.NewsState.isAnimating = false;
-      });
-    }
-
-    card.addEventListener("animationend", onOutEnd);
-    window.NewsState.current = news;
+export function renderReactions(news) {
+  if (likeCountEl) {
+    likeCountEl.textContent =
+      typeof news.likes === "number" ? String(news.likes) : "0";
   }
-
-  window.Render = {
-    renderNews,
-  };
-})();
+  if (dislikeCountEl) {
+    dislikeCountEl.textContent =
+      typeof news.dislikes === "number" ? String(news.dislikes) : "0";
+  }
+}
