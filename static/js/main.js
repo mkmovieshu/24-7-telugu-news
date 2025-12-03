@@ -1,32 +1,21 @@
-// static/js/main.js
-// Boots the whole UI – this is the brain
+import { fetchNewsList } from "./api.js";
+import { setNewsItems, getCurrentNews } from "./state.js";
+import { renderNewsCard } from "./render.js";
+import { initSwipe } from "./swipe.js";
+import { initLikes } from "./likes.js";
+import { initComments } from "./comments.js";
 
-async function loadNews(direction) {
+window.addEventListener("DOMContentLoaded", async () => {
   try {
-    const item = await window.fetchNewsItem(direction);
-    window.setCurrentNews(item);
-    window.renderNewsCard(item);
+    const items = await fetchNewsList();
+    setNewsItems(items);
+    const current = getCurrentNews();
+    renderNewsCard(current, "initial");
+
+    initSwipe();
+    initLikes();
+    initComments();
   } catch (err) {
-    console.error(err);
-    window.showNewsError("సమాచారం లోడ్ కాలేదు. కొంచెం తర్వాత మళ్లీ ప్రయత్నించండి.");
+    console.error("Failed to init app", err);
   }
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-  const card = document.getElementById("news-card");
-
-  // swipe (up -> next, down -> prev)
-  window.attachSwipeHandlers(card, {
-    onNext: () => loadNews("next"),
-    onPrev: () => loadNews("prev"),
-  });
-
-  // like / dislike
-  window.setupLikeButtons();
-
-  // comments
-  window.setupComments();
-
-  // initial news
-  loadNews();
 });
