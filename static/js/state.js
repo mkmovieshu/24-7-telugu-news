@@ -1,14 +1,32 @@
-// static/js/state.js
-// Simple global state for currently visible news item
+// News list & current index – ఇదే single source of truth
 
-window.NewsState = {
-  currentItem: null,
+export const newsState = {
+  items: [],
+  index: 0,
 };
 
-window.setCurrentNews = function setCurrentNews(item) {
-  window.NewsState.currentItem = item || null;
-};
+export function setNewsItems(items) {
+  newsState.items = Array.isArray(items) ? items : [];
+  newsState.index = 0;
+}
 
-window.getCurrentNews = function getCurrentNews() {
-  return window.NewsState.currentItem;
-};
+export function getCurrentNews() {
+  if (!newsState.items.length) return null;
+  return newsState.items[newsState.index];
+}
+
+export function moveNext() {
+  if (!newsState.items.length) return null;
+  if (newsState.index < newsState.items.length - 1) {
+    newsState.index += 1;
+  }
+  return getCurrentNews();
+}
+
+export function movePrev() {
+  if (!newsState.items.length) return null;
+  if (newsState.index > 0) {
+    newsState.index -= 1;
+  }
+  return getCurrentNews();
+}
