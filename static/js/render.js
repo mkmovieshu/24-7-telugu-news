@@ -1,63 +1,77 @@
 // static/js/render.js
+import { setCurrentNews, getCurrentNews } from "./state.js";
 
-import { getLoading } from "./state.js";
-
-const cardEl = document.getElementById("news-card");
 const titleEl = document.getElementById("news-title");
 const summaryEl = document.getElementById("news-summary");
+const loadingEl = document.getElementById("news-loading");
+const cardEl = document.getElementById("news-card");
 const moreInfoBtn = document.getElementById("more-info-btn");
+
+const likeBtn = document.getElementById("like-btn");
+const dislikeBtn = document.getElementById("dislike-btn");
 const likeCountEl = document.getElementById("like-count");
 const dislikeCountEl = document.getElementById("dislike-count");
 
-// loading / error / news render
+export function setLoading(isLoading) {
+  if (!loadingEl) return;
 
-export function renderLoading() {
-  if (!cardEl || !titleEl || !summaryEl) return;
-  cardEl.classList.add("loading");
-  titleEl.textContent = "Loading...";
-  summaryEl.textContent = "న్యూస్ లోడ్ అవుతోంది...";
+  if (isLoading) {
+    loadingEl.style.display = "block";
+  } else {
+    loadingEl.style.display = "none";
+  }
 }
 
-export function renderError(message) {
-  if (!cardEl || !titleEl || !summaryEl) return;
-  cardEl.classList.remove("loading");
-  titleEl.textContent = "ఎర్రర్ వచ్చింది";
-  summaryEl.textContent = message || "న్యూస్ ని లోడ్ చేయలేకపోయాం.";
-}
+export function renderNews(item) {
+  setCurrentNews(item);
 
-export function renderNews(news) {
-  if (!news || !cardEl || !titleEl || !summaryEl) return;
+  if (!item) {
+    if (titleEl) titleEl.textContent = "న్యూస్ అందుబాటులో లేదు";
+    if (summaryEl) summaryEl.textContent = "తర్వాత మళ్లీ ప్రయత్నించండి.";
+    if (moreInfoBtn) {
+      moreInfoBtn.href = "#";
+      moreInfoBtn.target = "_self";
+    }
+    if (cardEl) {
+      cardEl.dataset.newsId = "";
+    }
+    if (likeCountEl) likeCountEl.textContent = "0";
+    if (dislikeCountEl) dislikeCountEl.textContent = "0";
+    return;
+  }
 
-  cardEl.classList.remove("loading");
+  if (titleEl) titleEl.textContent = item.title;
+  if (summaryEl) summaryEl.textContent = item.summary;
 
-  // card కి id attach చేస్తాం – likes.js కి ఇదే life
-  cardEl.dataset.newsId = news.id || "";
-
-  titleEl.textContent = news.title || "";
-  summaryEl.textContent = news.summary || "";
+  if (cardEl) {
+    cardEl.dataset.newsId = item.id || "";
+  }
 
   if (moreInfoBtn) {
-    if (news.link) {
-      moreInfoBtn.href = news.link;
-      moreInfoBtn.target = "_blank";
-      moreInfoBtn.rel = "noopener noreferrer";
-      moreInfoBtn.classList.remove("disabled");
-    } else {
-      moreInfoBtn.href = "#";
-      moreInfoBtn.classList.add("disabled");
-    }
+    moreInfoBtn.href = item.link || "#";
+    moreInfoBtn.target = "_blank";
   }
 
-  renderReactions(news);
+  if (likeCountEl) likeCountEl.textContent = String(item.likes ?? 0);
+  if (dislikeCountEl) dislikeCountEl.textContent = String(item.dislikes ?? 0);
+
+  setLoading(false);
 }
 
-export function renderReactions(news) {
-  if (likeCountEl) {
-    likeCountEl.textContent =
-      typeof news.likes === "number" ? String(news.likes) : "0";
+export function getCurrentNewsId() {
+  const fromState = getCurrentNews();
+  if (fromState && fromState.id) return fromState.id;
+
+  if (cardEl && cardEl.dataset.newsId) return cardEl.dataset.newsId;
+
+  return null;
+}
+
+export function updateReactionCounts(deltaLikes, deltaDislikes) {
+  if (likeCountEl && typeof deltaLikes === "number") {
+    likeCountEl.textContent = String(deltaLikes);
   }
-  if (dislikeCountEl) {
-    dislikeCountEl.textContent =
-      typeof news.dislikes === "number" ? String(news.dislikes) : "0";
+  if (dislikeCountEl && typeof deltaDislikes === "number") {
+    dislikeCountEl.textContent = String(deltaDislikes);
   }
 }
