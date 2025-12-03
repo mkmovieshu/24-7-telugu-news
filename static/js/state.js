@@ -1,15 +1,14 @@
 // static/js/state.js
+// Simple global state for currently visible news item
 
-let currentNews = null;
+window.NewsState = {
+  currentItem: null,
+};
 
-export function setCurrentNews(item) {
-  currentNews = item;
-}
+window.setCurrentNews = function setCurrentNews(item) {
+  window.NewsState.currentItem = item || null;
+};
 
-export function getCurrentNews() {
-  return currentNews;
-}
-
-export function hasNews() {
-  return !!currentNews;
-}
+window.getCurrentNews = function getCurrentNews() {
+  return window.NewsState.currentItem;
+};
