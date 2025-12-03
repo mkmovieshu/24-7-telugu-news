@@ -1,33 +1,73 @@
-// ===============================
-// RENDER NEWS ITEM TO UI
-// ===============================
+// static/js/render.js
+// Renders a news item into the card
 
-export function renderNews(item) {
-    const card = document.getElementById("news-card");
-    const title = document.getElementById("news-title");
-    const summary = document.getElementById("news-summary");
-    const linkBtn = document.getElementById("news-link");
-    const likeCount = document.getElementById("like-count");
-    const dislikeCount = document.getElementById("dislike-count");
+window.renderNewsCard = function renderNewsCard(item) {
+  const card = document.getElementById("news-card");
+  if (!card) return;
 
-    if (!item) {
-        title.innerText = "Loading...";
-        summary.innerText = "న్యూస్ లోడ్ అవుతోంది...";
-        linkBtn.href = "#";
-        return;
+  const titleEl =
+    card.querySelector(".news-title") ||
+    document.getElementById("news-title");
+  const summaryEl =
+    card.querySelector(".news-summary") ||
+    document.getElementById("news-summary");
+  const moreBtn = document.getElementById("more-info-btn");
+  const likeCountEl = document.getElementById("like-count");
+  const dislikeCountEl = document.getElementById("dislike-count");
+
+  if (!item) {
+    if (titleEl) titleEl.textContent = "Loading...";
+    if (summaryEl) summaryEl.textContent = "న్యూస్ లోడ్ అవుతోంది...";
+    card.dataset.newsId = "";
+    if (moreBtn) moreBtn.style.display = "none";
+    if (likeCountEl) likeCountEl.textContent = "0";
+    if (dislikeCountEl) dislikeCountEl.textContent = "0";
+    return;
+  }
+
+  // save current id on card so likes/comments use it
+  if (item.id) {
+    card.dataset.newsId = item.id;
+  } else if (item._id) {
+    // just in case API returns _id
+    card.dataset.newsId = item._id;
+  } else {
+    card.dataset.newsId = "";
+  }
+
+  const title = item.title || "టైటిల్ లేదు";
+  const summary =
+    item.summary || item.raw_summary || "ఈ వార్తకు సమరీ అందుబాటులో లేదు.";
+
+  if (titleEl) titleEl.textContent = title;
+  if (summaryEl) summaryEl.textContent = summary;
+
+  if (moreBtn) {
+    if (item.link) {
+      moreBtn.style.display = "block";
+      moreBtn.onclick = () => {
+        window.open(item.link, "_blank", "noopener");
+      };
+    } else {
+      moreBtn.style.display = "none";
+      moreBtn.onclick = null;
     }
+  }
 
-    // Update content
-    title.innerText = item.title || "No title";
-    summary.innerText = item.summary || "No summary";
-    linkBtn.href = item.link || "#";
+  if (likeCountEl) likeCountEl.textContent = String(item.likes ?? 0);
+  if (dislikeCountEl) dislikeCountEl.textContent = String(item.dislikes ?? 0);
+};
 
-    // Update counts
-    likeCount.innerText = item.likes ?? 0;
-    dislikeCount.innerText = item.dislikes ?? 0;
+window.showNewsError = function showNewsError(message) {
+  const card = document.getElementById("news-card");
+  if (!card) return;
+  const titleEl =
+    card.querySelector(".news-title") ||
+    document.getElementById("news-title");
+  const summaryEl =
+    card.querySelector(".news-summary") ||
+    document.getElementById("news-summary");
 
-    // Animation
-    card.classList.remove("fade-in");
-    void card.offsetWidth;  // restart animation
-    card.classList.add("fade-in");
-}
+  if (titleEl) titleEl.textContent = "లోపం వచ్చింది";
+  if (summaryEl) summaryEl.textContent = message || "కొంచెం తర్వాత మళ్లీ ప్రయత్నించండి.";
+};
