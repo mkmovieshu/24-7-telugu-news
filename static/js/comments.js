@@ -1,70 +1,36 @@
-// Comment System (simple version)
-// ---------------------------------------------
+// "Fake" comments – only saved locally on device
 
-let commentsBoxVisible = false;
+(function () {
+  const input = document.getElementById("comment-input");
+  const btn = document.getElementById("comment-save-btn");
+  const statusEl = document.getElementById("comment-status");
 
-// HTML template for a single comment
-function renderComment(c) {
-    return `
-        <div class="comment-item">
-            <div class="comment-user">👤 ${c.user || "User"}</div>
-            <div class="comment-text">${c.text}</div>
-        </div>
-    `;
-}
-
-// Load comments for a news item
-async function loadComments(newsId) {
-    try {
-        const res = await fetch(`/api/comments/${newsId}`);
-        if (!res.ok) throw new Error("Failed to load comments");
-
-        const data = await res.json();
-        const list = document.getElementById("comments-list");
-
-        if (!list) return;
-
-        list.innerHTML = data.comments.map(renderComment).join("");
-    } catch (err) {
-        console.error("COMMENTS LOAD ERROR:", err);
-    }
-}
-
-// Submit new comment
-async function submitComment(newsId) {
-    const input = document.getElementById("comment-input");
-    const text = input.value.trim();
-
+  function showStatus(text) {
+    statusEl.textContent = text;
     if (!text) return;
+    setTimeout(() => {
+      statusEl.textContent = "";
+    }, 2000);
+  }
+
+  async function handleSave() {
+    const id = input.dataset.id;
+    const text = (input.value || "").trim();
+    if (!id || !text) {
+      showStatus("కామెంట్ టైప్ చేయండి.");
+      return;
+    }
 
     try {
-        const res = await fetch(`/api/comments/${newsId}`, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ text })
-        });
-
-        if (!res.ok) throw new Error("Failed to submit comment");
-
-        input.value = "";
-        await loadComments(newsId);
-    } catch (err) {
-        console.error("COMMENT SUBMIT ERROR:", err);
+      await Api.saveCommentLocally(id, text);
+      input.value = "";
+      showStatus("కామెంట్ ఈ ఫోన్లో సేవ్ అయింది.");
+    } catch {
+      showStatus("కామెంట్ సేవ్ కాలేదు.");
     }
-}
+  }
 
-// Toggle comment box
-function toggleComments(newsId) {
-    const box = document.getElementById("comments-box");
-
-    if (!box) return;
-
-    commentsBoxVisible = !commentsBoxVisible;
-
-    if (commentsBoxVisible) {
-        box.style.display = "block";
-        loadComments(newsId);
-    } else {
-        box.style.display = "none";
-    }
-}
+  if (btn && input) {
+    btn.addEventListener("click", handleSave);
+  }
+})();
