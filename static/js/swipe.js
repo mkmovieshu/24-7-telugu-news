@@ -1,54 +1,47 @@
-// static/js/swipe.js
-// Basic vertical swipe detection with a smooth fade animation
+import { moveNext, movePrev } from "./state.js";
+import { renderNewsCard } from "./render.js";
 
-window.attachSwipeHandlers = function attachSwipeHandlers(element, handlers) {
-  if (!element) return;
-  const { onNext, onPrev } = handlers || {};
+export function initSwipe() {
+  const card = document.getElementById("news-card");
+  if (!card) return;
 
   let startY = null;
-  const threshold = 50; // pixels
 
-  element.addEventListener(
+  card.addEventListener(
     "touchstart",
     (e) => {
-      const touch = e.touches[0];
-      startY = touch.clientY;
+      if (e.touches.length === 1) {
+        startY = e.touches[0].clientY;
+      }
     },
     { passive: true }
   );
 
-  element.addEventListener(
+  card.addEventListener(
     "touchend",
     (e) => {
       if (startY === null) return;
-      const touch = e.changedTouches[0];
-      const deltaY = touch.clientY - startY;
+      const endY = e.changedTouches[0].clientY;
+      const diffY = startY - endY;
+      const threshold = 40; // minimum swipe distance
 
-      // small moves ignore
-      if (Math.abs(deltaY) < threshold) {
+      if (Math.abs(diffY) < threshold) {
         startY = null;
         return;
       }
 
-      if (deltaY < 0 && typeof onNext === "function") {
-        // swipe up -> next news
-        animateCard(element, "up");
-        onNext();
-      } else if (deltaY > 0 && typeof onPrev === "function") {
-        // swipe down -> previous news
-        animateCard(element, "down");
-        onPrev();
+      if (diffY > 0) {
+        // swipe up -> next
+        const item = moveNext();
+        renderNewsCard(item, "next");
+      } else {
+        // swipe down -> prev
+        const item = movePrev();
+        renderNewsCard(item, "prev");
       }
 
       startY = null;
     },
     { passive: true }
   );
-};
-
-function animateCard(card, direction) {
-  if (!card) return;
-  card.classList.remove("swipe-up", "swipe-down");
-  void card.offsetWidth; // force reflow
-  card.classList.add(direction === "up" ? "swipe-up" : "swipe-down");
 }
