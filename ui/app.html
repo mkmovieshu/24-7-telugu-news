@@ -1,48 +1,83 @@
 <!DOCTYPE html>
 <html lang="te">
 <head>
-    <meta charset="UTF-8">
-    <title>24/7 Telugu Short News</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>24/7 Telugu Short News</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Main UI styles -->
-    <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/app.css" />
 </head>
 <body>
-<header class="app-header">
-    <div class="app-header-inner">
-        <div class="app-logo-dot"></div>
-        <div class="app-title-block">
-            <h1 class="app-title">24/7 Telugu Short News</h1>
-            <p class="app-subtitle">స్వైప్ చేస్తూ ఒక్కో చిన్న న్యూస్ చదవండి</p>
-        </div>
-    </div>
-</header>
+  <div class="app-root">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="app-icon"></div>
+      <div class="app-title-block">
+        <h1 class="app-title">24/7 Telugu Short News</h1>
+        <p class="app-subtitle">స్వైప్ చేస్తూ ఒకో న్యూస్ చూడండి</p>
+      </div>
+    </header>
 
-<main class="app-main">
-    <!-- JS ఇక్కడ news_item.html‌ని లోడ్ చేస్తుంది -->
-    <div id="news-root">
-        <div class="news-card news-card-loading">
-            <div class="news-body">
-                <h2 class="news-title">Loading...</h2>
-                <p class="news-summary">
-                    కాసేపటి లోపల తాజా న్యూస్ కనిపిస్తుంది.
-                </p>
-            </div>
-        </div>
-    </div>
-</main>
+    <!-- Main content -->
+    <main class="app-main">
+      <div class="news-card-wrapper">
+        <article id="news-card" class="news-card">
+          <h2 id="news-title" class="news-title">Loading...</h2>
+          <p id="news-summary" class="news-summary">
+            న్యూస్ లోడ్ అవుతోంది...
+          </p>
+        </article>
+      </div>
 
-<footer class="app-footer">
-    <p class="footer-text">
-        Swipe ↑ next news • Swipe ↓ previous news
-    </p>
-</footer>
+      <!-- More info button -->
+      <a id="more-info-btn" class="btn primary-btn" href="#" target="_blank" rel="noopener">
+        మరింత సమాచారం
+      </a>
 
-<!-- Swipe + loading logic -->
-<script src="/static/js/swipe.js" defer></script>
-<!-- Likes / dislikes logic (నీ దగ్గర ఇప్పటికే ఉన్న ఫైల్) -->
-<script src="/static/js/likes.js" defer></script>
-<script src="/static/js/comments.js" defer></script>
+      <!-- Like / Dislike -->
+      <div class="reaction-row">
+        <button id="like-btn" class="reaction-btn reaction-like">
+          <span class="reaction-icon">👍</span>
+          <span id="like-count" class="reaction-count">0</span>
+        </button>
+        <button id="dislike-btn" class="reaction-btn reaction-dislike">
+          <span class="reaction-icon">👎</span>
+          <span id="dislike-count" class="reaction-count">0</span>
+        </button>
+      </div>
+
+      <!-- Comment box -->
+      <section class="comment-section">
+        <label for="comment-input" class="comment-label">
+          టెక్స్ట్ కోసం మాత్రమే - మీ కామెంట్ ఈ ఫోన్లోనే సేవ్ అవుతుంది.
+        </label>
+        <textarea
+          id="comment-input"
+          class="comment-input"
+          rows="2"
+          placeholder="మీకు ఈ న్యూస్ ఎలా అనిపించింది?"
+        ></textarea>
+        <button id="comment-save-btn" class="btn secondary-btn">
+          కామెంట్ సేవ్ చేయి
+        </button>
+        <p id="comment-status" class="comment-status"></p>
+      </section>
+
+      <p class="swipe-hint">
+        పైకి స్వైప్ చేయండి 👉 తర్వాతి న్యూస్  
+        <br />
+        కిందికి స్వైప్ చేయండి 👉 ప్రీవియస్ న్యూస్
+      </p>
+    </main>
+  </div>
+
+  <!-- Scripts (order important) -->
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/state.js"></script>
+  <script src="/static/js/render.js"></script>
+  <script src="/static/js/swipe.js"></script>
+  <script src="/static/js/likes.js"></script>
+  <script src="/static/js/comments.js"></script>
+  <script src="/static/js/main.js"></script>
 </body>
 </html>
