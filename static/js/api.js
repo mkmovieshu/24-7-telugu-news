@@ -1,52 +1,60 @@
-// Basic API wrapper – only JSON, no UI here
-window.Api = (function () {
-  async function fetchJson(url, options = {}) {
-    const res = await fetch(url, {
-      headers: {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-      },
-      ...options,
-    });
+// static/js/api.js
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    return res.json();
+const BASE_URL = "";
+
+// ఒక్క న్యూస్ తెచ్చే API
+export async function fetchNews(direction = "current") {
+  const url =
+    direction === "current"
+      ? "/news"
+      : `/news?direction=${encodeURIComponent(direction)}`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch news: ${res.status}`);
   }
 
-  async function getNews(direction) {
-    const url = direction ? `/news?direction=${direction}` : "/news";
-    return fetchJson(url);
+  return await res.json(); // { id, title, summary, link, likes, dislikes }
+}
+
+// లైక్ / డిస్‌లైక్ API
+export async function sendReaction(newsId, type) {
+  const res = await fetch(`/news/${encodeURIComponent(newsId)}/reaction`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({ type }), // "like" | "dislike"
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to send reaction: ${res.status}`);
   }
 
-  async function sendReaction(id, type) {
-    // optional – if backend has endpoint
-    try {
-      await fetchJson(`/news/${id}/reaction`, {
-        method: "POST",
-        body: JSON.stringify({ type }),
-      });
-    } catch {
-      // ignore errors for now
-    }
+  return await res.json(); // కొత్త counts తో ఉన్న news object వస్తుందని assume చేస్తున్నాం
+}
+
+// కామెంట్ పంపడం (ఇంకా backend లో లేకపోయినా safe)
+export async function sendComment(newsId, text) {
+  const res = await fetch(`/news/${encodeURIComponent(newsId)}/comment`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to send comment: ${res.status}`);
   }
 
-  async function saveCommentLocally(id, text) {
-    // Only localStorage – no backend call
-    if (!id) return;
-    const key = `news_comments_${id}`;
-    const list = JSON.parse(localStorage.getItem(key) || "[]");
-    list.unshift({
-      text,
-      createdAt: Date.now(),
-    });
-    localStorage.setItem(key, JSON.stringify(list.slice(0, 20)));
-  }
-
-  return {
-    getNews,
-    sendReaction,
-    saveCommentLocally,
-  };
-})();
+  return await res.json();
+}
