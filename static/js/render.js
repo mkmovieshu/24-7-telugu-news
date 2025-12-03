@@ -1,143 +1,77 @@
-// render.js
-import {
-  state,
-  getItems,
-  getCurrentIndex,
-  getItemId,
-  getReactions,
-  getComments
-} from "./state.js";
+// Rendering + animation logic for news card
 
-const root = document.getElementById("news-root");
+(function () {
+  function setCardContent(news) {
+    const titleEl = document.getElementById("news-title");
+    const summaryEl = document.getElementById("news-summary");
+    const moreInfoBtn = document.getElementById("more-info-btn");
+    const likeCountEl = document.getElementById("like-count");
+    const dislikeCountEl = document.getElementById("dislike-count");
 
-function extractUrl(item) {
-  return (
-    item.original_link ||
-    item.link ||
-    item.url ||
-    (item.source && item.source.url) ||
-    "#"
-  );
-}
+    titleEl.textContent = news.title || "";
+    summaryEl.textContent = news.summary || "";
 
-function extractTitle(item) {
-  return item.title || item.heading || "శీర్షిక అందుబాటులో లేదు";
-}
+    if (news.link) {
+      moreInfoBtn.href = news.link;
+      moreInfoBtn.style.display = "block";
+    } else {
+      moreInfoBtn.href = "#";
+      moreInfoBtn.style.display = "none";
+    }
 
-function extractSummary(item) {
-  return (
-    item.summary ||
-    item.description ||
-    item.content ||
-    "ఈ న్యూస్ కు సమ్మరీ అందుబాటులో లేదు."
-  );
-}
+    likeCountEl.textContent = news.likes ?? 0;
+    dislikeCountEl.textContent = news.dislikes ?? 0;
 
-export function showLoading() {
-  root.innerHTML = `
-    <article class="card card--loading">
-      <div class="card-body">
-        <p>న్యూస్ లోడ్ అవుతోంది...</p>
-      </div>
-    </article>
-  `;
-}
-
-export function showError(msg) {
-  root.innerHTML = `
-    <article class="card card--error">
-      <div class="card-body">
-        <p>${msg || "న్యూస్ లోడ్ కాలేదు. కాసేపు తర్వాత ప్రయత్నించండి."}</p>
-      </div>
-    </article>
-  `;
-}
-
-export function renderCurrent(direction = "up") {
-  const items = getItems();
-  const idx = getCurrentIndex();
-
-  if (!items.length) {
-    showError("ప్రస్తుతం న్యూస్ అందుబాటులో లేదు.");
-    return;
+    // store id on buttons for reactions/comments
+    document.getElementById("like-btn").dataset.id = news.id;
+    document.getElementById("dislike-btn").dataset.id = news.id;
+    document.getElementById("comment-input").dataset.id = news.id;
   }
 
-  const item = items[idx];
-  const id = getItemId(item, idx);
-  const url = extractUrl(item);
-  const title = extractTitle(item);
-  const summary = extractSummary(item);
-  const reactions = getReactions(id);
-  const comments = getComments(id);
+  async function renderNews(news, direction) {
+    const card = document.getElementById("news-card");
+    if (!card) return;
 
-  const animClass =
-    direction === "down" ? "card-enter-down" : "card-enter-up";
+    if (!direction) {
+      // first render, no animation
+      setCardContent(news);
+      window.NewsState.current = news;
+      return;
+    }
 
-  root.innerHTML = `
-    <article class="card ${animClass}" data-id="${id}">
-      <header>
-        <h2 class="card-title">${title}</h2>
-      </header>
+    if (window.NewsState.isAnimating) return;
+    window.NewsState.isAnimating = true;
 
-      <section class="card-body">
-        <p>${summary}</p>
-      </section>
+    const outClass =
+      direction === "next" ? "flip-out-up" : "flip-out-down";
+    const inClass = direction === "next" ? "flip-in-up" : "flip-in-down";
 
-      <footer class="card-footer">
-        <div class="feedback-row">
-          <div class="reactions">
-            <button class="reaction-btn reaction-btn--like" data-action="like">
-              ❤️ <span class="count">${reactions.like}</span>
-            </button>
-            <button class="reaction-btn reaction-btn--dislike" data-action="dislike">
-              👎 <span class="count">${reactions.dislike}</span>
-            </button>
-          </div>
-          <button class="comments-toggle" data-action="toggle-comments">
-            కామెంట్స్ (${comments.length})
-          </button>
-        </div>
+    // Step 1: play flip-out
+    card.classList.remove("flip-in-up", "flip-in-down");
+    card.classList.add(outClass);
 
-        <section class="comments-section" data-comments>
-          <textarea
-            class="comment-input"
-            placeholder="మీ అభిప్రాయం ఇక్కడ రాయండి..."
-          ></textarea>
-          <button class="comment-submit" data-action="submit-comment">
-            కామెంట్ పంపండి
-          </button>
-          <div class="comments-list">
-            ${comments
-              .map((c) => `<div class="comment-item">${c}</div>`)
-              .join("")}
-          </div>
-        </section>
+    function onOutEnd(e) {
+      if (e.target !== card) return;
+      card.removeEventListener("animationend", onOutEnd);
+      card.classList.remove(outClass);
 
-        <a
-          class="read-more-btn"
-          href="${url}"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          పూర్తి వార్త చదవండి
-        </a>
-      </footer>
-    </article>
-  `;
+      // Step 2: change content, then flip-in
+      setCardContent(news);
+      card.classList.add(inClass);
 
-  // నా లైక్/డిస్‌లైక్ స్టేటస్ ప్రకారం బటన్ల రంగులు
-  const card = root.querySelector(".card");
-  const likeBtn = card.querySelector('[data-action="like"]');
-  const dislikeBtn = card.querySelector('[data-action="dislike"]');
+      card.addEventListener("animationend", function onInEnd(ev) {
+        if (ev.target !== card) return;
+        card.removeEventListener("animationend", onInEnd);
+        card.classList.remove(inClass);
+        window.NewsState.isAnimating = false;
+      });
+    }
 
-  if (reactions.my === "like") {
-    likeBtn.classList.add("active");
-    dislikeBtn.classList.remove("active");
-  } else if (reactions.my === "dislike") {
-    dislikeBtn.classList.add("active");
-    likeBtn.classList.remove("active");
-  } else {
-    likeBtn.classList.remove("active");
-    dislikeBtn.classList.remove("active");
+    card.addEventListener("animationend", onOutEnd);
+    window.NewsState.current = news;
   }
-}
+
+  window.Render = {
+    renderNews,
+  };
+})();
