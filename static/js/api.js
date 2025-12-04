@@ -1,39 +1,28 @@
-// Backend API helpers
-
-export async function fetchNewsList() {
-  const res = await fetch("/news");
-  if (!res.ok) {
-    throw new Error("Failed to load news");
-  }
-  const data = await res.json();
-  return data.items || [];
+// static/js/api.js
+export async function fetchNewsList(limit = 100) {
+  const url = `/news?limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("failed to fetch news");
+  return res.json();
 }
 
-export async function sendReaction(newsId, action) {
-  const res = await fetch(`/news/${newsId}/reaction`, {
+export async function postReaction(itemId, type = "like") {
+  const url = `/likes/${itemId}`;
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action }),
+    body: JSON.stringify({ type })
   });
-  if (!res.ok) {
-    throw new Error("Reaction failed");
-  }
-  return await res.json();
+  if (!res.ok) return false;
+  return res.json();
 }
 
-export async function fetchComments(newsId) {
-  const res = await fetch(`/news/${newsId}/comments`);
-  if (!res.ok) throw new Error("Failed to load comments");
-  const data = await res.json();
-  return data.items || [];
-}
-
-export async function sendComment(newsId, text) {
-  const res = await fetch(`/news/${newsId}/comments`, {
+export async function postComment(itemId, text) {
+  const url = `/comments/${itemId}`;
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text })
   });
-  if (!res.ok) throw new Error("Failed to save comment");
-  return await res.json();
+  return res.json();
 }
