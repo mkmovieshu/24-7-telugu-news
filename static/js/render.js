@@ -1,66 +1,64 @@
+// static/js/render.js
 import { getCurrentNews } from "./state.js";
 
 const cardEl = document.getElementById("news-card");
 const titleEl = document.getElementById("news-title");
 const summaryEl = document.getElementById("news-summary");
 const moreBtn = document.getElementById("more-info-btn");
-
 const likeCountEl = document.getElementById("like-count");
 const dislikeCountEl = document.getElementById("dislike-count");
+const imageEl = document.getElementById("news-image");
 
 function setFallback() {
   titleEl.textContent = "టైటిల్ లేదు";
-  summaryEl.textContent = "ఈ వార్తకు సమరీ అందుబాటులో లేదు.";
-  moreBtn.onclick = null;
+  summaryEl.textContent = "న్యూస్ లోడ్ అవుతోంది...";
   likeCountEl.textContent = "0";
   dislikeCountEl.textContent = "0";
+  imageEl.style.display = "none";
   cardEl.dataset.id = "";
+  moreBtn.onclick = null;
 }
 
-/**
- * direction: "initial" | "next" | "prev"
- */
 export function renderNewsCard(item, direction = "initial") {
   if (!item) {
     setFallback();
     return;
   }
 
-  // animation classes
+  // reset animation
   cardEl.classList.remove("slide-up", "slide-down");
-  // force reflow
   void cardEl.offsetWidth;
 
-  if (direction === "next") {
-    cardEl.classList.add("slide-up");
-  } else if (direction === "prev") {
-    cardEl.classList.add("slide-down");
-  }
+  if (direction === "next") cardEl.classList.add("slide-up");
+  if (direction === "prev") cardEl.classList.add("slide-down");
 
   titleEl.textContent = item.title || "టైటిల్ లేదు";
-  summaryEl.textContent =
-    item.summary || "ఈ వార్తకు సమరీ అందుబాటులో లేదు.";
-
-  likeCountEl.textContent = item.likes ?? 0;
-  dislikeCountEl.textContent = item.dislikes ?? 0;
-
+  summaryEl.textContent = item.summary || "";
+  likeCountEl.textContent = (item.likes !== undefined) ? item.likes : 0;
+  dislikeCountEl.textContent = (item.dislikes !== undefined) ? item.dislikes : 0;
   cardEl.dataset.id = item.id || "";
 
+  if (item.image) {
+    imageEl.src = item.image;
+    imageEl.style.display = "block";
+    imageEl.onclick = () => {
+      if (item.link) window.open(item.link, "_blank");
+    };
+  } else {
+    imageEl.style.display = "none";
+  }
+
   moreBtn.onclick = () => {
-    if (item.link) {
-      window.open(item.link, "_blank");
-    }
+    if (item.link) window.open(item.link, "_blank");
   };
 }
 
-// external helper – లైక్స్ అప్డేట్ కోసం
 export function updateReactions(likes, dislikes) {
-  likeCountEl.textContent = likes ?? likeCountEl.textContent;
-  dislikeCountEl.textContent = dislikes ?? dislikeCountEl.textContent;
+  if (likes !== undefined) likeCountEl.textContent = likes;
+  if (dislikes !== undefined) dislikeCountEl.textContent = dislikes;
 }
 
-// initial loading fallback
-export function renderInitialLoading() {
+export function renderInitial() {
   const current = getCurrentNews();
   if (!current) {
     setFallback();
