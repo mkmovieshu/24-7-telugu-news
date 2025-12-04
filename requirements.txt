@@ -1,6 +1,28 @@
-gunicorn==20.1.0
-Flask==2.3.3
+# core framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+gunicorn==21.2.0
+
+# MongoDB async driver
+motor==3.7.1
 pymongo==4.8.0
-python-dotenv==1.0.1
+
+# templating + static
+jinja2==3.1.6
+
+# RSS / HTTP
 feedparser==6.0.11
-httpx==0.27.2
+requests==2.31.0
+python-dateutil==2.9.0.post0
+python-dotenv==1.0.1
+
+# optional: groq client (if you want to use GROQ/Groq AI)
+# note: groq sometimes pulls platform-specific wheels; if it causes build problems
+# remove it and use fallback summarizer (your code already falls back safely).
+groq==0.37.0
+
+# misc
+dnspython==2.8.0
+
+# for running locally/other: (only dev)
+# pytest / black not required on server; keep minimal for production
