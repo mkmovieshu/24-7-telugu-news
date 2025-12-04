@@ -1,28 +1,25 @@
-# core framework
+# web framework + server
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 gunicorn==21.2.0
 
-# MongoDB async driver
+# MongoDB async driver (motor needs pymongo >=4.9)
 motor==3.7.1
-pymongo==4.8.0
+pymongo==4.9.1
 
 # templating + static
 jinja2==3.1.6
 
-# RSS / HTTP
+# RSS / HTTP / utils
 feedparser==6.0.11
 requests==2.31.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 
-# optional: groq client (if you want to use GROQ/Groq AI)
-# note: groq sometimes pulls platform-specific wheels; if it causes build problems
-# remove it and use fallback summarizer (your code already falls back safely).
+# Groq (optional - only if you actually need it; can remove if causes build issues)
+# NOTE: groq may occasionally cause build issues on some platforms. If build fails,
+# comment out/remove the next line and use fallback summarizer.
 groq==0.37.0
 
-# misc
+# dns helper
 dnspython==2.8.0
-
-# for running locally/other: (only dev)
-# pytest / black not required on server; keep minimal for production
