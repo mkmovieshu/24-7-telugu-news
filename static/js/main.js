@@ -1,119 +1,211 @@
-// main.js (entry)
-import { fetchNewsList, sendReaction } from "./api.js";
-import { loadCommentsForNews, saveCommentForNews } from "./comments.js";
+// static/js/main.js
+(function(){
+  // ======= config =======
+  const API_BASE = ''; // same origin (fastapi app serves)
+  const NEWS_LIMIT = 100;
 
-console.log("[main] boot");
+  // ======= state =======
+  let newsList = [];
+  let idx = 0;
 
-const els = {
-  newsTitle: document.getElementById("news-title"),
-  newsSummary: document.getElementById("news-summary"),
-  likeBtn: document.getElementById("like-btn"),
-  dislikeBtn: document.getElementById("dislike-btn"),
-  likeCount: document.getElementById("like-count"),
-  dislikeCount: document.getElementById("dislike-count"),
-  moreInfoBtn: document.getElementById("more-info-btn"),
-  commentInput: document.getElementById("comment-text"),
-  saveCommentBtn: document.getElementById("save-comment-btn"),
-  commentsList: document.getElementById("comments-list"),
-};
+  // ======= DOM refs =======
+  const titleEl = document.getElementById('news-title');
+  const summaryEl = document.getElementById('news-summary');
+  const linkEl = document.getElementById('news-link');
+  const likesCountEl = document.getElementById('likesCount');
+  const dislikesCountEl = document.getElementById('dislikesCount');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
 
-let newsList = [];
-let idx = 0;
+  const commentListEl = document.getElementById('commentList');
+  const commentForm = document.getElementById('commentForm');
+  const commentInput = document.getElementById('commentInput');
+  const commentsCountEl = document.getElementById('comments-count');
 
-function renderCurrent() {
-  const item = newsList[idx];
-  if (!item) {
-    els.newsTitle.textContent = "టైటిల్ లేదు";
-    els.newsSummary.textContent = "న్యూస్ లేదు";
-    els.likeCount.textContent = "0";
-    els.dislikeCount.textContent = "0";
-    els.commentsList.innerHTML = "";
-    return;
-  }
-  els.newsTitle.textContent = item.title || "";
-  els.newsSummary.textContent = item.summary || "";
-  els.likeCount.textContent = String(item.likes || 0);
-  els.dislikeCount.textContent = String(item.dislikes || 0);
-
-  // load comments for this news
-  loadCommentsForNews(item.id, els.commentsList).catch(e => {
-    console.error("[main] loadComments error", e);
+  // logger overlay
+  const logBox = document.getElementById('mini-logger');
+  const toggleBtn = document.getElementById('logger-toggle');
+  toggleBtn.addEventListener('click', ()=> {
+    logBox.style.display = logBox.style.display === 'block' ? 'none' : 'block';
   });
-}
-
-async function loadAllNews() {
-  try {
-    console.log("[main] loading news...");
-    newsList = await fetchNewsList();
-    idx = 0;
-    renderCurrent();
-    console.log("[main] news loaded", newsList.length);
-  } catch (err) {
-    console.error("[main] failed to load news", err);
-    els.newsTitle.textContent = "నెట్వర్క్ లోపం";
-    els.newsSummary.textContent = "న్యూస్ లిస్ట్ తీసుకురాలేదు";
+  function log(type, msg){
+    try{
+      const d = document.createElement('div');
+      d.textContent = `[${type}] ${msg}`;
+      if(type==='error') d.style.color = '#ff8080';
+      logBox.appendChild(d);
+      logBox.scrollTop = logBox.scrollHeight;
+    }catch(e){}
+    if(type==='error') console.error(msg); else console.log(msg);
   }
-}
 
-els.likeBtn.addEventListener("click", async () => {
-  const cur = newsList[idx];
-  if (!cur) return;
-  try {
-    const resp = await sendReaction(cur.id, "like");
-    els.likeCount.textContent = String(resp.likes || 0);
-    console.log("[main] liked", resp);
-  } catch (err) {
-    console.error("[main] like failed", err);
-    alert("Like failed");
+  // helper fetch JSON (with logging)
+  async function fetchJSON(url, opts){
+    log('info', `fetch ${url} ${opts?JSON.stringify(opts):''}`);
+    const res = await fetch(url, opts);
+    let bodyText;
+    try{ bodyText = await res.clone().text(); }catch(e){ bodyText = ''; }
+    log('info', `resp ${res.status} ${bodyText.slice(0,800)}`);
+    if(!res.ok){
+      const text = await res.text().catch(()=>(''));
+      throw new Error(`HTTP ${res.status} - ${text}`);
+    }
+    return res.json().catch(()=>{ return bodyText ? JSON.parse(bodyText) : {}; });
   }
-});
 
-els.dislikeBtn.addEventListener("click", async () => {
-  const cur = newsList[idx];
-  if (!cur) return;
-  try {
-    const resp = await sendReaction(cur.id, "dislike");
-    els.dislikeCount.textContent = String(resp.dislikes || 0);
-  } catch (err) {
-    console.error("[main] dislike failed", err);
-    alert("Dislike failed");
+  // ======= UI renderers =======
+  function renderCard(){
+    if(!newsList || newsList.length===0){
+      titleEl.textContent = "టైటిల్ లేదు";
+      summaryEl.textContent = "న్యూస్ లోడ్ అవలేదో... అప్పుడు Refresh చెయ్యండి";
+      linkEl.href = "#";
+      likesCountEl.textContent = "0";
+      dislikesCountEl.textContent = "0";
+      commentListEl.innerHTML = '';
+      commentsCountEl.textContent = "0";
+      return;
+    }
+    const item = newsList[idx];
+    titleEl.textContent = item.title || 'ఉపశీర్షిక లేదు';
+    summaryEl.textContent = item.summary || '';
+    linkEl.href = item.link || '#';
+    likesCountEl.textContent = (item.likes||0);
+    dislikesCountEl.textContent = (item.dislikes||0);
+
+    // load comments for this news
+    loadCommentsForCurrent();
   }
-});
 
-els.moreInfoBtn.addEventListener("click", () => {
-  const cur = newsList[idx];
-  if (!cur) return;
-  if (cur.link) window.open(cur.link, "_blank");
-});
-
-els.saveCommentBtn.addEventListener("click", async () => {
-  const cur = newsList[idx];
-  const text = (els.commentInput.value || "").trim();
-  if (!cur || !text) {
-    alert("Enter comment");
-    return;
+  function showNext(){
+    if(newsList.length===0) return;
+    idx = (idx + 1) % newsList.length;
+    renderCard();
   }
-  try {
-    await saveCommentForNews(cur.id, text);
-    // refresh comments
-    els.commentInput.value = "";
-    await loadCommentsForNews(cur.id, els.commentsList);
-  } catch (err) {
-    console.error("[main] comment save failed", err);
-    alert("Failed to save comment");
+  function showPrev(){
+    if(newsList.length===0) return;
+    idx = (idx - 1 + newsList.length) % newsList.length;
+    renderCard();
   }
-});
 
-// Simple swipe: next news when body clicked (or you can add gesture lib)
-document.body.addEventListener("click", (e) => {
-  // ignore clicks on buttons/inputs
-  if (e.target.closest("button") || e.target.closest("input")) return;
-  // next
-  if (!newsList || newsList.length === 0) return;
-  idx = (idx + 1) % newsList.length;
-  renderCurrent();
-});
+  // ======= backend actions =======
+  async function loadNews(){
+    try{
+      const data = await fetchJSON(`/news?limit=${NEWS_LIMIT}`, { method: 'GET' });
+      // backend returns { items: [...] } as seen earlier
+      const items = data.items || [];
+      // normalize: ensure id, title, summary, link, likes, dislikes
+      newsList = items.map(it=>({
+        id: it.id || it._id || '',
+        title: it.title || '',
+        summary: it.summary || '',
+        link: it.link || it.source || '',
+        likes: Number(it.likes||0),
+        dislikes: Number(it.dislikes||0)
+      }));
+      idx = 0;
+      renderCard();
+      log('info', `loaded ${newsList.length} news`);
+    }catch(err){
+      log('error', 'loadNews error: ' + err.message);
+      titleEl.textContent = "న్యూస్ లోడ్ తప్పియా";
+      summaryEl.textContent = err.message || '';
+    }
+  }
 
-window.addEventListener("load", () => {
-  loadAllNews();
-});
+  async function postReaction(action){
+    if(!newsList[idx] || !newsList[idx].id) { log('error','no news id'); return; }
+    const id = newsList[idx].id;
+    try{
+      const payload = { action: action === 'like' ? 'like' : 'dislike' };
+      const res = await fetchJSON(`/news/${id}/reaction`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      // update local
+      newsList[idx].likes = res.likes;
+      newsList[idx].dislikes = res.dislikes;
+      likesCountEl.textContent = newsList[idx].likes;
+      dislikesCountEl.textContent = newsList[idx].dislikes;
+    }catch(err){
+      log('error','postReaction error: ' + (err.message||err));
+      alert('Reaction తప్పిపోయింది: '+err.message);
+    }
+  }
+
+  async function loadCommentsForCurrent(){
+    commentListEl.innerHTML = '';
+    commentsCountEl.textContent = '0';
+    if(!newsList[idx] || !newsList[idx].id) return;
+    const id = newsList[idx].id;
+    try{
+      const data = await fetchJSON(`/news/${id}/comments`, { method: 'GET' });
+      const items = (data.items || []);
+      commentsCountEl.textContent = items.length;
+      if(items.length===0){
+        commentListEl.innerHTML = '<div class="sm">ఇక్కడ ఎటువంటి కామెంట్స్ లేవు</div>';
+        return;
+      }
+      for(const c of items){
+        const el = document.createElement('div');
+        el.className = 'comment';
+        el.textContent = c.text + '  ·  ' + (c.created_at ? new Date(c.created_at).toLocaleString() : '');
+        commentListEl.appendChild(el);
+      }
+    }catch(err){
+      log('error','loadComments error: '+err.message);
+      commentListEl.innerHTML = '<div class="sm">కామెంట్స్ లో లోప్</div>';
+    }
+  }
+
+  async function postComment(text){
+    if(!newsList[idx] || !newsList[idx].id) { alert('News id లేదు'); return; }
+    if(!text || !text.trim()){ alert('ఖాళీ కామెంట్ పంప్వద్దు'); return; }
+    const id = newsList[idx].id;
+    try{
+      const res = await fetchJSON(`/news/${id}/comments`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ text: text })
+      });
+      // add to local render immediately by reloading comments
+      commentInput.value = '';
+      await loadCommentsForCurrent();
+    }catch(err){
+      log('error','postComment error: '+err.message);
+      alert('కామెంట్ పంపడంలో లోపం: '+err.message);
+    }
+  }
+
+  // ======= attach events =======
+  prevBtn.addEventListener('click', showPrev);
+  nextBtn.addEventListener('click', showNext);
+  document.getElementById('likeBtn').addEventListener('click', ()=>postReaction('like'));
+  document.getElementById('dislikeBtn').addEventListener('click', ()=>postReaction('dislike'));
+
+  commentForm.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    const txt = commentInput.value;
+    postComment(txt);
+  });
+
+  // enable left/right arrow keys
+  window.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight') showNext();
+    if(e.key === 'ArrowLeft') showPrev();
+  });
+
+  // on load
+  document.addEventListener('DOMContentLoaded', ()=>{
+    loadNews();
+  });
+
+  // catch errors
+  window.addEventListener('error', function(ev){
+    log('error','JS error: '+ev.message+' @ '+(ev.filename||'')+':'+(ev.lineno||''));
+  });
+  window.addEventListener('unhandledrejection', function(ev){
+    log('error','Promise reject: '+(ev.reason && ev.reason.message ? ev.reason.message : JSON.stringify(ev.reason)));
+  });
+
+})();
