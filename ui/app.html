@@ -7,6 +7,79 @@
   <link rel="stylesheet" href="/static/css/app.css" />
   <link rel="stylesheet" href="/static/css/styles.css" />
 </head>
+  <!-- small in-page logger — paste before </body> -->
+<script>
+(function(){
+  // create overlay
+  const box = document.createElement('div');
+  box.id = 'mini-logger';
+  Object.assign(box.style, {
+    position:'fixed', left:0, right:0, bottom:0, zIndex:99999,
+    maxHeight:'35vh', overflowY:'auto', background:'rgba(0,0,0,0.8)',
+    color:'#ffeb99', fontSize:'13px', padding:'8px', fontFamily:'monospace'
+  });
+  document.body.appendChild(box);
+
+  function logToBox(type, msg){
+    const el = document.createElement('div');
+    el.textContent = '[' + type.toUpperCase() + '] ' + (typeof msg === 'string' ? msg : JSON.stringify(msg));
+    el.style.padding='4px 0';
+    if(type==='error'){ el.style.color='#ff8080'; }
+    box.appendChild(el);
+    // keep bottom visible
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // intercept console
+  ['log','info','warn','error'].forEach(fn=>{
+    const orig = console[fn];
+    console[fn] = function(...args){
+      try{ logToBox(fn, args.map(a=> (typeof a==='object'? JSON.stringify(a): String(a))).join(' ')); }catch(e){}
+      orig.apply(console,args);
+    };
+  });
+
+  // show fetch responses (optional): wrap window.fetch
+  if(window.fetch){
+    const origFetch = window.fetch;
+    window.fetch = async function(...args){
+      try{
+        logToBox('info','fetch → '+ (args[0] || '') );
+        const res = await origFetch.apply(this,args);
+        // clone so we don't consume body for the app
+        const clone = res.clone();
+        clone.text().then(t=> {
+          const short = t.length>800? t.slice(0,800)+'…': t;
+          logToBox('info','fetch resp '+res.status+': '+ short);
+        }).catch(()=>{});
+        return res;
+      }catch(err){
+        logToBox('error','fetch error: '+err);
+        throw err;
+      }
+    };
+  }
+
+  // window.onerror catch
+  window.addEventListener('error', (ev)=>{
+    logToBox('error', ev.message + ' @ ' + (ev.filename||'') + ':' + (ev.lineno||''));
+  });
+
+  // unhandled rejections
+  window.addEventListener('unhandledrejection', (ev)=>{
+    logToBox('error','unhandledrejection: ' + (ev.reason && ev.reason.message ? ev.reason.message : JSON.stringify(ev.reason)));
+  });
+
+  // small toggle on top-left to collapse
+  const togg = document.createElement('button');
+  togg.textContent = 'Logger';
+  Object.assign(togg.style, {position:'fixed', left:6, bottom:'36vh', zIndex:999999, padding:'6px 8px', background:'#111', color:'#fff', border:'1px solid #444', cursor:'pointer'});
+  togg.onclick = ()=> box.style.display = (box.style.display==='none'?'block':'none');
+  document.body.appendChild(togg);
+
+  logToBox('info','In-page logger active — use toggle button to hide/show. Fetches and console.* will appear here.');
+})();
+</script>
 <body>
   <header class="app-header">
     <div class="logo">🔆</div>
