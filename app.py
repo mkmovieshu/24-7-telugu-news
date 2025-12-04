@@ -179,3 +179,21 @@ if __name__ == "__main__":
     t.start()
     port = int(os.getenv("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=True)
+MONGO_URL = os.getenv("MONGO_URL")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
+
+if not MONGO_URL:
+    # Development fallback: allow process to start, but don't connect to DB.
+    # This avoids process crash on start when env var not set (Render / local dev).
+    # When MONGO_URL is not set, the endpoints that need DB will return meaningful errors.
+    import logging
+    logging.warning("MONGO_URL not set — running in 'no-db' fallback mode.")
+    client = None
+    db = None
+    news_col = None
+    comments_col = None
+else:
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[MONGO_DB_NAME]
+    news_col = db["news"]
+    comments_col = db["comments"]
