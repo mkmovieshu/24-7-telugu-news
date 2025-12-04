@@ -1,54 +1,66 @@
-// Backend API helpers
-// (slim wrapper around your FastAPI endpoints)
+// static/js/api.js
+// Backend API helpers (with compatibility exports for other modules)
 
-export async function fetchNewsList() {
-  console.log("[api] fetchNewsList()");
-  const res = await fetch("/news");
+async function _fetchJson(url, opts) {
+  const res = await fetch(url, opts);
   if (!res.ok) {
-    console.error("[api] fetchNewsList failed", res.status);
-    throw new Error("Failed to load news");
+    const text = await res.text().catch(()=>"");
+    const err = new Error(`HTTP ${res.status} ${res.statusText}: ${text}`);
+    err.status = res.status;
+    throw err;
   }
-  const data = await res.json();
-  return data.items || [];
+  return res.json().catch(()=>null);
 }
 
+export async function fetchNewsList() {
+  const data = await _fetchJson("/news");
+  return data && data.items ? data.items : [];
+}
+
+// old name compatibility (if some module expects fetchNews)
+export const fetchNews = fetchNewsList;
+
 export async function sendReaction(newsId, action) {
-  console.log("[api] sendReaction", newsId, action);
-  const res = await fetch(`/news/${newsId}/reaction`, {
+  return await _fetchJson(`/news/${newsId}/reaction`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action }),
   });
-  if (!res.ok) {
-    const text = await res.text().catch(()=>"");
-    console.error("[api] sendReaction failed", res.status, text);
-    throw new Error("Reaction failed");
-  }
-  return await res.json();
 }
 
 export async function fetchComments(newsId) {
-  console.log("[api] fetchComments", newsId);
-  const res = await fetch(`/news/${newsId}/comments`);
-  if (!res.ok) {
-    console.error("[api] fetchComments failed", res.status);
-    throw new Error("Failed to load comments");
-  }
-  const data = await res.json();
-  return data.items || [];
+  const data = await _fetchJson(`/news/${newsId}/comments`);
+  return data && data.items ? data.items : [];
 }
 
 export async function sendComment(newsId, text) {
-  console.log("[api] sendComment", newsId, text);
-  const res = await fetch(`/news/${newsId}/comments`, {
+  return await _fetchJson(`/news/${newsId}/comments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
-  if (!res.ok) {
-    const txt = await res.text().catch(()=>"");
-    console.error("[api] sendComment failed", res.status, txt);
-    throw new Error("Failed to save comment");
-  }
-  return await res.json();
+}
+
+/*
+  Compatibility / wrapper exports:
+  Some other frontend modules expect these names:
+    - loadCommentsForCurrent
+    - postComment
+    - postReaction (maybe)
+  We export them so existing imports keep working.
+*/
+
+export async function loadCommentsForCurrent(newsId) {
+  // returns array of comment objects
+  return await fetchComments(newsId);
+}
+
+export async function postComment(newsId, text) {
+  // returns { id: "<inserted_id>" } or throws
+  return await sendComment(newsId, text);
+}
+
+export async function postReaction(newsId, action) {
+  // existing sendReaction returns likes/dislikes; wrapper name
+  return await sendReaction(newsId, action);
 }
