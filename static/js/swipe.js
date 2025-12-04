@@ -1,140 +1,94 @@
-// static/js/swipe.js
-// Improved vertical swipe: up => next, down => prev
-// Adds touchmove handling and prevents native scroll when gesture detected.
+// Replace your existing static/js/swipe.js with this exact file.
+// Behaves:
+// - Swipe UP  (finger moves up)  => triggers "Next" button
+// - Swipe DOWN(finger moves down)=> triggers "Prev" button
+// Also supports mouse wheel (optional) for desktops.
 
 (function () {
-  const THRESHOLD = 60; // vertical px to count as swipe
-  const MAX_HORIZONTAL = 100; // disallow if too much horizontal movement
-  const MAX_TIME = 1000; // ms
+  const THRESHOLD = 50; // px minimum to count as swipe
 
-  let startX = 0, startY = 0, startTime = 0;
-  let tracking = false;
-  let moved = false; // whether touchmove exceeded small slop
+  let startY = null;
+  let startTime = null;
 
-  function isFormElement(el) {
-    if (!el) return false;
-    const tag = (el.tagName || "").toLowerCase();
-    return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
-  }
-
-  function findButtonByText(text) {
+  function findAndClickButton(nameLower) {
+    // try to find a visible button whose text includes nameLower
     const buttons = Array.from(document.querySelectorAll("button, a"));
-    const lower = text.toLowerCase();
-    for (let b of buttons) {
-      const t = (b.innerText || b.textContent || "").trim().toLowerCase();
-      if (t === lower) return b;
-      if (t.indexOf(lower) === 0) return b;
-    }
-    return null;
-  }
-
-  function triggerNext() {
-    if (typeof window.nextNews === "function") { window.nextNews(); return; }
-    const btn = document.querySelector(".btn-next, .next, [data-action='next']") || findButtonByText("next");
-    if (btn) { btn.click(); return; }
-    document.dispatchEvent(new CustomEvent("swipe:next"));
-  }
-
-  function triggerPrev() {
-    if (typeof window.prevNews === "function") { window.prevNews(); return; }
-    const btn = document.querySelector(".btn-prev, .prev, [data-action='prev']") || findButtonByText("prev");
-    if (btn) { btn.click(); return; }
-    document.dispatchEvent(new CustomEvent("swipe:prev"));
-  }
-
-  function onStart(x, y) {
-    startX = x; startY = y; startTime = Date.now();
-    tracking = true; moved = false;
-  }
-
-  function onEnd(x, y) {
-    if (!tracking) return;
-    const distX = x - startX;
-    const distY = y - startY;
-    const elapsed = Date.now() - startTime;
-    tracking = false; moved = false;
-
-    if (elapsed > MAX_TIME) return;
-
-    if (Math.abs(distY) >= THRESHOLD && Math.abs(distX) < MAX_HORIZONTAL) {
-      if (distY < 0) triggerNext(); else triggerPrev();
-    }
-  }
-
-  // TOUCH EVENTS (note: passive:false on touchstart to allow preventDefault in touchmove)
-  document.addEventListener("touchstart", function (e) {
-    if (!e.touches || e.touches.length > 1) return;
-    const t = e.touches[0];
-    if (isFormElement(e.target)) return;
-    onStart(t.clientX, t.clientY);
-  }, { passive: false });
-
-  document.addEventListener("touchmove", function (e) {
-    if (!tracking) return;
-    const t = e.touches && e.touches[0];
-    if (!t) return;
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-
-    // if vertical movement dominates and already beyond small slop, prevent page scroll
-    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
-      moved = true;
-      // if vertical movement large and primarily vertical, stop native scroll so we can handle swipe
-      if (Math.abs(dy) > 20 && Math.abs(dx) < MAX_HORIZONTAL) {
-        // prevent default to avoid page pull-to-refresh or native scroll interfering
-        e.preventDefault();
+    for (const b of buttons) {
+      try {
+        const txt = (b.innerText || b.textContent || "").trim().toLowerCase();
+        if (!txt) continue;
+        if (txt.includes(nameLower)) {
+          b.click();
+          return true;
+        }
+      } catch (e) {
+        // ignore
       }
     }
-  }, { passive: false });
+    return false;
+  }
 
-  document.addEventListener("touchend", function (e) {
-    if (!tracking) return;
-    const t = (e.changedTouches && e.changedTouches[0]) || null;
-    if (!t) { tracking = false; return; }
-    onEnd(t.clientX, t.clientY);
-  }, { passive: true });
+  function onTouchStart(e) {
+    if (!e.touches || e.touches.length === 0) return;
+    startY = e.touches[0].clientY;
+    startTime = Date.now();
+  }
 
-  document.addEventListener("touchcancel", function () {
-    tracking = false; moved = false;
-  });
-
-  // POINTER EVENTS fallback
-  document.addEventListener("pointerdown", function (e) {
-    if (!e.isPrimary) return;
-    if (isFormElement(e.target)) return;
-    onStart(e.clientX, e.clientY);
-  });
-
-  document.addEventListener("pointermove", function (e) {
-    if (!tracking || !e.isPrimary) return;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
-    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
-      moved = true;
-      // optionally preventDefault for pointer events if supported (not always necessary)
-      if (typeof e.preventDefault === "function" && Math.abs(dy) > 20 && Math.abs(dx) < MAX_HORIZONTAL) {
-        try { e.preventDefault(); } catch (err) { /* ignore */ }
-      }
+  function onTouchEnd(e) {
+    if (startY === null) return;
+    // if changedTouches present
+    const touch = (e.changedTouches && e.changedTouches[0]) || null;
+    const endY = touch ? touch.clientY : null;
+    if (endY === null) {
+      startY = null;
+      return;
     }
-  });
+    const dy = endY - startY;
+    const dt = Date.now() - (startTime || Date.now());
 
-  document.addEventListener("pointerup", function (e) {
-    if (!e.isPrimary) return;
-    onEnd(e.clientX, e.clientY);
-  });
+    // quick swipe guard: require some movement
+    if (Math.abs(dy) < THRESHOLD) {
+      startY = null;
+      return;
+    }
 
-  document.addEventListener("pointercancel", function () {
-    tracking = false; moved = false;
-  });
+    if (dy < 0) {
+      // finger moved up (swipe up) => Next
+      const clicked = findAndClickButton("next") || findAndClickButton("నెక్స్ట్") || findAndClickButton("మరింత");
+      // fallback: call window.nextArticle() if exists
+      if (!clicked && typeof window.nextArticle === "function") window.nextArticle();
+    } else {
+      // finger moved down (swipe down) => Prev
+      const clicked = findAndClickButton("prev") || findAndClickButton("prev") || findAndClickButton("పీవ్యూ") || findAndClickButton("prev");
+      if (!clicked && typeof window.prevArticle === "function") window.prevArticle();
+    }
 
-  // keyboard convenience
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "ArrowUp") { e.preventDefault(); triggerNext(); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); triggerPrev(); }
-  });
+    startY = null;
+  }
 
-  // helpers exposed for debugging
-  window.__swipe_debug = {
-    triggerNext, triggerPrev
-  };
+  // wheel support: scroll up/down -> next/prev (optional)
+  function onWheel(e) {
+    // ignore if ctrl/shift pressed
+    if (e.ctrlKey || e.shiftKey || e.metaKey) return;
+    if (Math.abs(e.deltaY) < 10) return;
+    if (e.deltaY > 0) {
+      // scroll down -> show Prev (per your request: down swipe => prev)
+      findAndClickButton("prev") || (typeof window.prevArticle === "function" && window.prevArticle());
+    } else {
+      // scroll up -> show Next
+      findAndClickButton("next") || (typeof window.nextArticle === "function" && window.nextArticle());
+    }
+  }
+
+  // attach listeners to the main content area if exists, otherwise document
+  const mount = document.querySelector("main") || document.querySelector("#app") || document;
+
+  mount.addEventListener("touchstart", onTouchStart, { passive: true });
+  mount.addEventListener("touchend", onTouchEnd, { passive: true });
+  // wheel on desktop
+  mount.addEventListener("wheel", onWheel, { passive: true });
+
+  // small helpful log to confirm file loaded (remove later if you want)
+  console.info("swipe.js loaded — swipe up => NEXT, swipe down => PREV");
 
 })();
