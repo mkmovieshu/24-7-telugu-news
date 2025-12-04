@@ -37,3 +37,30 @@
   <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>
+<script>
+window.onerror = function(msg, src, line, col, error) {
+    let box = document.getElementById("error-box");
+    if (!box) {
+        box = document.createElement("div");
+        box.id = "error-box";
+        box.style.position = "fixed";
+        box.style.bottom = "0";
+        box.style.left = "0";
+        box.style.width = "100%";
+        box.style.maxHeight = "200px";
+        box.style.overflowY = "auto";
+        box.style.background = "rgba(0,0,0,0.8)";
+        box.style.color = "yellow";
+        box.style.fontSize = "14px";
+        box.style.padding = "8px";
+        box.style.zIndex = "99999";
+        document.body.appendChild(box);
+    }
+    box.innerHTML = `
+        <b>ERROR:</b> ${msg}<br>
+        <b>File:</b> ${src}<br>
+        <b>Line:</b> ${line}, <b>Col:</b> ${col}<br>
+        <pre>${error && error.stack ? error.stack : ""}</pre>
+    `;
+};
+</script>
