@@ -1,72 +1,72 @@
-<!-- /opt/render/project/src/ui/app.html -->
-<script src="/static/js/dev-overlay.js"></script>
-<!doctype html>
+<!DOCTYPE html>
 <html lang="te">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-  <title>24/7 Telugu Short News</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>24/7 Telugu Short News</title>
 
-  <link rel="stylesheet" href="/static/css/app.css">
-  <link rel="stylesheet" href="/static/css/styles.css">
-
-  <meta name="theme-color" content="#ffffff">
+    <link rel="stylesheet" href="/static/css/app.css" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
 </head>
+
 <body>
-  <main class="app-root">
-    <header class="topbar">
-      <div class="brand">24/7 <span class="accent">Telugu</span> Short News</div>
-      <div class="hint">స్వైప్ చేయండి ↑ / ↓</div>
+
+    <header class="header">
+        <h1><span style="color: orange;">24/7</span> <span style="color:#FF5722;">Telugu</span> Short News</h1>
+        <div class="swipe-label">స్వైప్ చేయండి ↑ / ↓</div>
     </header>
 
-    <section id="news-stage" class="stage">
-      <article id="news-card" class="card">
-        <div class="media">
-          <img id="news-image" src="/static/img/placeholder.png" alt="news image" />
+    <main id="news-container">
+
+        <!-- Image removed completely -->
+        <!-- News Content -->
+        <div class="news-content">
+            <h2 id="news-title"></h2>
+            <p id="news-summary"></p>
+
+            <a id="news-original" href="#" target="_blank" class="original-link">Read original</a>
+
+            <div class="nav-buttons">
+                <button id="prev-btn" class="btn-prev">Prev</button>
+
+                <div class="reactions">
+                    <button id="like-btn" class="reaction-btn">👍</button>
+                    <span id="like-count">0</span>
+
+                    <button id="dislike-btn" class="reaction-btn">👎</button>
+                    <span id="dislike-count">0</span>
+                </div>
+
+                <button id="next-btn" class="btn-next">Next</button>
+            </div>
         </div>
 
-        <div class="content">
-          <h1 id="news-title" class="title">న్యూస్ టైటిల్ రాలేదు</h1>
-          <p id="news-summary" class="summary">న్యూస్ లోడ్ అవుతోంది...</p>
+        <!-- Comments -->
+        <section class="comments-box">
+            <h3 class="comments-title">కామెంట్స్</h3>
 
-          <div class="meta-row">
-            <a id="news-link" class="read-more" href="#" target="_blank" rel="noopener">Read original</a>
-
-            <div class="reactions small">
-              <button id="like-btn" class="icon-btn">👍</button><span id="likes-count">0</span>
-              <button id="dislike-btn" class="icon-btn">👎</button><span id="dislikes-count">0</span>
+            <div id="comments-list" class="comments-list">
+                <p class="no-comments">కామెంట్స్ లోడ్ అవుతున్నాయి...</p>
             </div>
-          </div>
 
-          <div class="controls">
-            <button id="prev-btn" class="primary ghost">Prev</button>
-            <div class="spacer"></div>
-            <button id="next-btn" class="primary">Next</button>
-          </div>
-
-          <div id="comments-section" class="comments">
-            <h3>కామెంట్స్</h3>
-            <div id="comments-list" class="comments-list">కామెంట్స్ లోడ్ అవుతున్నాయి...</div>
-
-            <div class="comment-form">
-              <input id="comment-input" placeholder="మీ అభిప్రాయాన్ని రాయండి..." />
-              <button id="comment-post" class="primary small">పోస్ట్</button>
+            <div class="comment-input-area">
+                <input id="comment-input" type="text" placeholder="మీ అభిప్రాయాన్ని రాయండి..." />
+                <button id="send-comment" class="send-btn">పంపండి</button>
             </div>
-          </div>
-        </div>
-      </article>
-    </section>
+        </section>
+    </main>
 
-    <footer class="footer-note">
-      <div class="small-note">Source summarised by AI • 24-48 hour auto-prune</div>
+    <footer class="footer">
+        <p>Source summarised by AI • 24–48 hour auto-prune</p>
     </footer>
-  </main>
 
-  <!-- scripts: keep module ordering consistent -->
-  <script type="module" src="/static/js/main.js"></script>
-  <script type="module" src="/static/js/swipe.js"></script>
-  <script type="module" src="/static/js/api.js"></script>
-  <script type="module" src="/static/js/comments.js"></script>
-  <script type="module" src="/static/js/likes.js"></script>
+    <script src="/static/js/state.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/render.js"></script>
+    <script src="/static/js/swipe.js"></script>
+    <script src="/static/js/comments.js"></script>
+    <script src="/static/js/likes.js"></script>
+    <script src="/static/js/main.js"></script>
+
 </body>
 </html>
