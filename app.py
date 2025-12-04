@@ -1,4 +1,4 @@
-# app.py
+# ~/project/app.py
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +12,7 @@ from datetime import datetime
 import logging
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("shortnews")
+log = logging.getLogger("shortnews")
 
 # -----------------------
 # FastAPI & Templates
@@ -20,7 +20,6 @@ logger = logging.getLogger("shortnews")
 
 app = FastAPI(title="24/7 Telugu Short News")
 
-# serve static files from ./static
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="ui")
 
@@ -32,7 +31,6 @@ MONGO_URL = os.getenv("MONGO_URL")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
 
 if not MONGO_URL:
-    # if you want local dev, set MONGO_URL env var in Render / GitHub Actions / local.
     raise RuntimeError("MONGO_URL environment variable not set")
 
 client = AsyncIOMotorClient(MONGO_URL)
@@ -40,14 +38,15 @@ db = client[MONGO_DB_NAME]
 news_col = db["news"]
 comments_col = db["comments"]
 
-logger.info("Connected to MongoDB")
-
 # -----------------------
 # Helpers
 # -----------------------
 
 def serialize_news(doc):
-    """Convert mongodb doc to frontend-friendly dict"""
+    """
+    Simple serializer WITHOUT created_at to avoid isoformat errors.
+    This prevents server 500 when created_at is missing or malformed.
+    """
     if not doc:
         return None
     return {
@@ -57,14 +56,7 @@ def serialize_news(doc):
         "link": doc.get("link") or doc.get("source") or "",
         "likes": int(doc.get("likes", 0) or 0),
         "dislikes": int(doc.get("dislikes", 0) or 0),
-        "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
-
-def parse_objectid(s: str):
-    try:
-        return ObjectId(s)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid id")
 
 # -----------------------
 # Pages
@@ -72,80 +64,57 @@ def parse_objectid(s: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    """
-    Serve the single-page frontend (app.html).
-    Frontend fetches /news?limit=... and other APIs.
-    """
     return templates.TemplateResponse("app.html", {"request": request})
 
 # -----------------------
-# News APIs
+# News API
 # -----------------------
 
 @app.get("/news", response_class=JSONResponse)
 async def list_news(limit: int = 100):
     """
-    Return list of news items (most-recent first).
-    Frontend uses this once and then manages swipe locally.
+    Return list of news items. No created_at returned (keeps stable).
     """
     cursor = news_col.find({}, sort=[("created_at", -1)]).limit(limit)
     items = [serialize_news(doc) async for doc in cursor]
     return {"items": items}
 
-@app.get("/news/{news_id}", response_class=JSONResponse)
-async def get_news(news_id: str):
-    """Return a single news item by id (used by some frontends)."""
-    oid = parse_objectid(news_id)
-    doc = await news_col.find_one({"_id": oid})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Not found")
-    return {"item": serialize_news(doc)}
-
 @app.post("/news/{news_id}/reaction", response_class=JSONResponse)
 async def add_reaction(news_id: str, payload: dict):
     """
-    Legacy route: payload = { "action": "like" | "dislike" }
+    Like / Dislike endpoint.
+    payload = { "action": "like" | "dislike" }
     """
-    action = (payload.get("action") or "").strip().lower()
+    action = payload.get("action")
     if action not in ("like", "dislike"):
         raise HTTPException(status_code=400, detail="Invalid action")
+
     field = "likes" if action == "like" else "dislikes"
-    oid = parse_objectid(news_id)
+
+    try:
+        oid = ObjectId(news_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid news id")
+
     result = await news_col.update_one({"_id": oid}, {"$inc": {field: 1}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="News not found")
-    doc = await news_col.find_one({"_id": oid})
-    data = serialize_news(doc)
-    return {"likes": data["likes"], "dislikes": data["dislikes"]}
 
-# Provide simpler endpoints the frontend seems to call (/likes/<id>, /dislikes/<id>)
-@app.post("/likes/{news_id}", response_class=JSONResponse)
-async def post_like(news_id: str):
-    oid = parse_objectid(news_id)
-    result = await news_col.update_one({"_id": oid}, {"$inc": {"likes": 1}})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="News not found")
-    doc = await news_col.find_one({"_id": oid})
-    data = serialize_news(doc)
-    return {"likes": data["likes"], "dislikes": data["dislikes"]}
-
-@app.post("/dislikes/{news_id}", response_class=JSONResponse)
-async def post_dislike(news_id: str):
-    oid = parse_objectid(news_id)
-    result = await news_col.update_one({"_id": oid}, {"$inc": {"dislikes": 1}})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="News not found")
     doc = await news_col.find_one({"_id": oid})
     data = serialize_news(doc)
     return {"likes": data["likes"], "dislikes": data["dislikes"]}
 
 # -----------------------
-# Comments APIs
+# Comments API
 # -----------------------
 
 @app.get("/news/{news_id}/comments", response_class=JSONResponse)
 async def get_comments(news_id: str):
-    oid = parse_objectid(news_id)
+    try:
+        oid = ObjectId(news_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid news id")
+
     cursor = comments_col.find({"news_id": oid}).sort("created_at", -1)
     items = []
     async for doc in cursor:
@@ -153,7 +122,12 @@ async def get_comments(news_id: str):
             {
                 "id": str(doc["_id"]),
                 "text": doc.get("text", ""),
-                "created_at": doc.get("created_at", datetime.utcnow()).isoformat(),
+                # don't assume created_at has isoformat; convert to string safely
+                "created_at": (
+                    doc.get("created_at").isoformat()
+                    if hasattr(doc.get("created_at"), "isoformat")
+                    else str(doc.get("created_at") or "")
+                ),
             }
         )
     return {"items": items}
@@ -163,7 +137,12 @@ async def add_comment(news_id: str, payload: dict):
     text = (payload.get("text") or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty comment")
-    oid = parse_objectid(news_id)
+
+    try:
+        oid = ObjectId(news_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid news id")
+
     doc = {
         "news_id": oid,
         "text": text,
@@ -173,21 +152,14 @@ async def add_comment(news_id: str, payload: dict):
     return {"id": str(res.inserted_id)}
 
 # -----------------------
-# Utility endpoints (optional)
-# -----------------------
-
-@app.get("/healthz")
-async def health():
-    return {"status": "ok"}
-
-# -----------------------
-# Startup / Shutdown hooks (optional logging)
+# Startup / Shutdown logs
 # -----------------------
 
 @app.on_event("startup")
-async def on_start():
-    logger.info("App startup complete")
+async def startup():
+    log.info("Connected to MongoDB")
+    log.info("App startup complete")
 
 @app.on_event("shutdown")
-async def on_stop():
-    logger.info("App shutdown")
+async def shutdown():
+    log.info("App shutdown")
