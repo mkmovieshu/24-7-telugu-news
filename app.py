@@ -4,124 +4,190 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from motor.motor_asyncio import AsyncIOMotorClient
+from bson import ObjectId
+
 import os
 from datetime import datetime
 import logging
-import asyncio
 
-# try motor import (async mongo client)
-try:
-    from motor.motor_asyncio import AsyncIOMotorClient
-    has_motor = True
-except Exception:
-    AsyncIOMotorClient = None
-    has_motor = False
-
-# basic config
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("shortnews")
 
+# -----------------------
+# FastAPI & Templates
+# -----------------------
+
 app = FastAPI(title="24/7 Telugu Short News")
 
-# static and templates
+# serve static files from ./static
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="ui")
 
-# Mongo config (optional)
-MONGO_URL = os.getenv("MONGO_URL", "")
+# -----------------------
+# MongoDB
+# -----------------------
+
+MONGO_URL = os.getenv("MONGO_URL")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
 
-# if Mongo present and motor available, connect; else fallback to in-memory store
-db_client = None
-news_col = None
-comments_col = None
-use_in_memory = False
-_inmemory_news = []
+if not MONGO_URL:
+    # if you want local dev, set MONGO_URL env var in Render / GitHub Actions / local.
+    raise RuntimeError("MONGO_URL environment variable not set")
 
-if MONGO_URL and has_motor:
-    try:
-        db_client = AsyncIOMotorClient(MONGO_URL)
-        db = db_client[MONGO_DB_NAME]
-        news_col = db["news"]
-        comments_col = db["comments"]
-        logger.info("Connected to MongoDB")
-    except Exception as e:
-        logger.exception("Failed connecting to MongoDB, falling back to in-memory: %s", e)
-        use_in_memory = True
-else:
-    logger.warning("MONGO_URL not set or motor not available. Using in-memory store.")
-    use_in_memory = True
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[MONGO_DB_NAME]
+news_col = db["news"]
+comments_col = db["comments"]
 
-# helper serialiser for docs (works for both)
-def serialize_news_doc(doc):
+logger.info("Connected to MongoDB")
+
+# -----------------------
+# Helpers
+# -----------------------
+
+def serialize_news(doc):
+    """Convert mongodb doc to frontend-friendly dict"""
     if not doc:
         return None
     return {
-        "id": str(doc.get("_id", doc.get("id"))),
-        "title": doc.get("title", ""),
-        "summary": doc.get("summary", ""),
-        "link": doc.get("link", ""),
-        "likes": int(doc.get("likes", 0)),
-        "dislikes": int(doc.get("dislikes", 0)),
-        "created_at": doc.get("created_at")
+        "id": str(doc.get("_id")),
+        "title": doc.get("title") or "",
+        "summary": doc.get("summary") or "",
+        "link": doc.get("link") or doc.get("source") or "",
+        "likes": int(doc.get("likes", 0) or 0),
+        "dislikes": int(doc.get("dislikes", 0) or 0),
+        "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
 
-# demo endpoint: serve index page
+def parse_objectid(s: str):
+    try:
+        return ObjectId(s)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+
+# -----------------------
+# Pages
+# -----------------------
+
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    # render UI template (ui/app.html expected)
+async def home(request: Request):
+    """
+    Serve the single-page frontend (app.html).
+    Frontend fetches /news?limit=... and other APIs.
+    """
     return templates.TemplateResponse("app.html", {"request": request})
 
-# API: get news list
-@app.get("/news")
-async def api_news(limit: int = 20):
-    if use_in_memory:
-        # return last items
-        items = list(reversed(_inmemory_news[-limit:]))
-        return {"items": items}
-    else:
-        cursor = news_col.find().sort("created_at", -1).limit(limit)
-        docs = []
-        async for d in cursor:
-            docs.append(serialize_news_doc(d))
-        return {"items": docs}
+# -----------------------
+# News APIs
+# -----------------------
 
-# API: add news (for fetcher script to post processed news)
-@app.post("/news")
-async def add_news(payload: dict):
-    payload.setdefault("likes", 0)
-    payload.setdefault("dislikes", 0)
-    payload.setdefault("created_at", datetime.utcnow().isoformat())
+@app.get("/news", response_class=JSONResponse)
+async def list_news(limit: int = 100):
+    """
+    Return list of news items (most-recent first).
+    Frontend uses this once and then manages swipe locally.
+    """
+    cursor = news_col.find({}, sort=[("created_at", -1)]).limit(limit)
+    items = [serialize_news(doc) async for doc in cursor]
+    return {"items": items}
 
-    if use_in_memory:
-        # make simple id
-        nid = str(len(_inmemory_news) + 1)
-        item = {"id": nid, **payload}
-        _inmemory_news.append(item)
-        return JSONResponse({"ok": True, "item": item})
-    else:
-        res = await news_col.insert_one(payload)
-        inserted = await news_col.find_one({"_id": res.inserted_id})
-        return JSONResponse({"ok": True, "item": serialize_news_doc(inserted)})
-
-# simple health
-@app.get("/health")
-async def health():
-    return {"status": "ok", "time": datetime.utcnow().isoformat()}
-
-# static route for news items if you want direct html render
-@app.get("/news/{news_id}", response_class=HTMLResponse)
-async def news_view(request: Request, news_id: str):
-    if use_in_memory:
-        for n in _inmemory_news:
-            if str(n.get("id")) == news_id:
-                return templates.TemplateResponse("news_item.html", {"request": request, "news": n})
+@app.get("/news/{news_id}", response_class=JSONResponse)
+async def get_news(news_id: str):
+    """Return a single news item by id (used by some frontends)."""
+    oid = parse_objectid(news_id)
+    doc = await news_col.find_one({"_id": oid})
+    if not doc:
         raise HTTPException(status_code=404, detail="Not found")
-    else:
-        doc = await news_col.find_one({"_id": news_id}) if False else await news_col.find_one({"_id": news_id})  # real apps convert id
-        # for simplicity, try lookup by string id field too:
-        if not doc:
-            doc = await news_col.find_one({"id": news_id})
-        if not doc:
-            raise HTTPException(status_code=404, detail="Not found")
-        return templates.TemplateResponse("news_item.html", {"request": request, "news": serialize_news_doc(doc)})
+    return {"item": serialize_news(doc)}
+
+@app.post("/news/{news_id}/reaction", response_class=JSONResponse)
+async def add_reaction(news_id: str, payload: dict):
+    """
+    Legacy route: payload = { "action": "like" | "dislike" }
+    """
+    action = (payload.get("action") or "").strip().lower()
+    if action not in ("like", "dislike"):
+        raise HTTPException(status_code=400, detail="Invalid action")
+    field = "likes" if action == "like" else "dislikes"
+    oid = parse_objectid(news_id)
+    result = await news_col.update_one({"_id": oid}, {"$inc": {field: 1}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="News not found")
+    doc = await news_col.find_one({"_id": oid})
+    data = serialize_news(doc)
+    return {"likes": data["likes"], "dislikes": data["dislikes"]}
+
+# Provide simpler endpoints the frontend seems to call (/likes/<id>, /dislikes/<id>)
+@app.post("/likes/{news_id}", response_class=JSONResponse)
+async def post_like(news_id: str):
+    oid = parse_objectid(news_id)
+    result = await news_col.update_one({"_id": oid}, {"$inc": {"likes": 1}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="News not found")
+    doc = await news_col.find_one({"_id": oid})
+    data = serialize_news(doc)
+    return {"likes": data["likes"], "dislikes": data["dislikes"]}
+
+@app.post("/dislikes/{news_id}", response_class=JSONResponse)
+async def post_dislike(news_id: str):
+    oid = parse_objectid(news_id)
+    result = await news_col.update_one({"_id": oid}, {"$inc": {"dislikes": 1}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="News not found")
+    doc = await news_col.find_one({"_id": oid})
+    data = serialize_news(doc)
+    return {"likes": data["likes"], "dislikes": data["dislikes"]}
+
+# -----------------------
+# Comments APIs
+# -----------------------
+
+@app.get("/news/{news_id}/comments", response_class=JSONResponse)
+async def get_comments(news_id: str):
+    oid = parse_objectid(news_id)
+    cursor = comments_col.find({"news_id": oid}).sort("created_at", -1)
+    items = []
+    async for doc in cursor:
+        items.append(
+            {
+                "id": str(doc["_id"]),
+                "text": doc.get("text", ""),
+                "created_at": doc.get("created_at", datetime.utcnow()).isoformat(),
+            }
+        )
+    return {"items": items}
+
+@app.post("/news/{news_id}/comments", response_class=JSONResponse)
+async def add_comment(news_id: str, payload: dict):
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Empty comment")
+    oid = parse_objectid(news_id)
+    doc = {
+        "news_id": oid,
+        "text": text,
+        "created_at": datetime.utcnow(),
+    }
+    res = await comments_col.insert_one(doc)
+    return {"id": str(res.inserted_id)}
+
+# -----------------------
+# Utility endpoints (optional)
+# -----------------------
+
+@app.get("/healthz")
+async def health():
+    return {"status": "ok"}
+
+# -----------------------
+# Startup / Shutdown hooks (optional logging)
+# -----------------------
+
+@app.on_event("startup")
+async def on_start():
+    logger.info("App startup complete")
+
+@app.on_event("shutdown")
+async def on_stop():
+    logger.info("App shutdown")
