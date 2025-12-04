@@ -4,136 +4,81 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>24/7 Telugu Short News</title>
-  <link rel="stylesheet" href="/static/css/app.css" />
-  <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <style>
+    /* minimal layout fallback so it'll look ok even without your css */
+    body{font-family:Helvetica,Arial,sans-serif;background:#fff;margin:0;padding:0}
+    .wrap{max-width:820px;margin:20px auto;padding:16px}
+    .header{display:flex;align-items:center;gap:12px}
+    .logo{font-size:28px;font-weight:700}
+    .card{background:#fff;border-radius:10px;padding:20px;margin-top:18px;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+    .title{font-size:26px;margin:0 0 8px}
+    .summary{color:#444;margin-bottom:10px}
+    .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
+    .btn{background:#0b63ff;color:white;padding:8px 12px;border-radius:6px;border:0;cursor:pointer}
+    .btn.secondary{background:#eee;color:#222}
+    .likes-box{margin-left:auto;display:flex;gap:8px;align-items:center}
+    .count{background:#fff;border:1px solid #ddd;padding:6px 8px;border-radius:6px}
+    .comments{margin-top:16px}
+    .comment-list{margin-top:8px}
+    .comment{padding:8px;background:#fafafa;border-radius:6px;margin-bottom:6px}
+    input[type=text]{padding:10px;border-radius:6px;border:1px solid #ddd;width:100%}
+    form{display:flex;gap:8px;margin-top:8px}
+    form button{padding:10px 12px}
+    .nav{display:flex;gap:8px;margin-top:12px}
+    .sm{font-size:13px;color:#666}
+    /* overlay logger small */
+    #mini-logger{position:fixed;left:0;right:0;bottom:0;z-index:99999;max-height:28vh;overflow:auto;background:rgba(0,0,0,.8);color:#ffd; font-family:monospace; font-size:12px;padding:6px; display:none}
+    #logger-toggle{position:fixed;left:6px;bottom:calc(28vh + 8px);z-index:999999;padding:6px 8px;background:#111;color:#fff;border-radius:6px;border:0}
+  </style>
 </head>
-  <!-- small in-page logger — paste before </body> -->
-<script>
-(function(){
-  // create overlay
-  const box = document.createElement('div');
-  box.id = 'mini-logger';
-  Object.assign(box.style, {
-    position:'fixed', left:0, right:0, bottom:0, zIndex:99999,
-    maxHeight:'35vh', overflowY:'auto', background:'rgba(0,0,0,0.8)',
-    color:'#ffeb99', fontSize:'13px', padding:'8px', fontFamily:'monospace'
-  });
-  document.body.appendChild(box);
-
-  function logToBox(type, msg){
-    const el = document.createElement('div');
-    el.textContent = '[' + type.toUpperCase() + '] ' + (typeof msg === 'string' ? msg : JSON.stringify(msg));
-    el.style.padding='4px 0';
-    if(type==='error'){ el.style.color='#ff8080'; }
-    box.appendChild(el);
-    // keep bottom visible
-    box.scrollTop = box.scrollHeight;
-  }
-
-  // intercept console
-  ['log','info','warn','error'].forEach(fn=>{
-    const orig = console[fn];
-    console[fn] = function(...args){
-      try{ logToBox(fn, args.map(a=> (typeof a==='object'? JSON.stringify(a): String(a))).join(' ')); }catch(e){}
-      orig.apply(console,args);
-    };
-  });
-
-  // show fetch responses (optional): wrap window.fetch
-  if(window.fetch){
-    const origFetch = window.fetch;
-    window.fetch = async function(...args){
-      try{
-        logToBox('info','fetch → '+ (args[0] || '') );
-        const res = await origFetch.apply(this,args);
-        // clone so we don't consume body for the app
-        const clone = res.clone();
-        clone.text().then(t=> {
-          const short = t.length>800? t.slice(0,800)+'…': t;
-          logToBox('info','fetch resp '+res.status+': '+ short);
-        }).catch(()=>{});
-        return res;
-      }catch(err){
-        logToBox('error','fetch error: '+err);
-        throw err;
-      }
-    };
-  }
-
-  // window.onerror catch
-  window.addEventListener('error', (ev)=>{
-    logToBox('error', ev.message + ' @ ' + (ev.filename||'') + ':' + (ev.lineno||''));
-  });
-
-  // unhandled rejections
-  window.addEventListener('unhandledrejection', (ev)=>{
-    logToBox('error','unhandledrejection: ' + (ev.reason && ev.reason.message ? ev.reason.message : JSON.stringify(ev.reason)));
-  });
-
-  // small toggle on top-left to collapse
-  const togg = document.createElement('button');
-  togg.textContent = 'Logger';
-  Object.assign(togg.style, {position:'fixed', left:6, bottom:'36vh', zIndex:999999, padding:'6px 8px', background:'#111', color:'#fff', border:'1px solid #444', cursor:'pointer'});
-  togg.onclick = ()=> box.style.display = (box.style.display==='none'?'block':'none');
-  document.body.appendChild(togg);
-
-  logToBox('info','In-page logger active — use toggle button to hide/show. Fetches and console.* will appear here.');
-})();
-</script>
 <body>
-  <header class="app-header">
-    <div class="logo">🔆</div>
-    <h1>24/7 Telugu Short News</h1>
-  </header>
+  <div class="wrap">
+    <div class="header">
+      <div class="logo">☀️ 24/7 Telugu Short News</div>
+    </div>
 
-  <main id="app">
-    <article id="news-card" class="news-card" data-id="">
-      <img id="news-image" src="" alt="" style="display:none; max-width:100%; border-radius:6px; margin-bottom:8px;" />
-      <h2 id="news-title">టైటిల్ లేదు</h2>
-      <p id="news-summary">న్యూస్ లోడ్ అవుతోంది...</p>
-    </article>
+    <div class="card" id="news-card">
+      <h2 class="title" id="news-title">లోడ్ అవుతోంది...</h2>
+      <div class="summary" id="news-summary">న్యూస్ కోసం వేచి ఉంది...</div>
+      <a id="news-link" href="#" target="_blank" class="sm" style="color:#0b63ff;display:inline-block;margin-top:8px">మూలం చూడటానికి</a>
 
-    <div class="controls">
-      <button id="more-info-btn" class="big-btn">మరింత చదవండి</button>
-      <div class="reactions">
-        <button id="like-btn">👍 <span id="like-count">0</span></button>
-        <button id="dislike-btn">👎 <span id="dislike-count">0</span></button>
+      <div class="controls">
+        <div class="nav">
+          <button id="prevBtn" class="btn secondary">Prev</button>
+          <button id="nextBtn" class="btn">Next</button>
+        </div>
+
+        <div class="likes-box">
+          <button id="likeBtn" class="btn secondary">👍</button>
+          <div id="likesCount" class="count">0</div>
+          <button id="dislikeBtn" class="btn secondary">👎</button>
+          <div id="dislikesCount" class="count">0</div>
+        </div>
+      </div>
+
+      <div class="comments" id="comments-root">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <strong>కామెంట్స్</strong>
+          <small class="sm" id="comments-count">0</small>
+        </div>
+
+        <div class="comment-list" id="commentList"></div>
+
+        <form id="commentForm">
+          <input type="text" id="commentInput" placeholder="మీ అభిప్రాయాన్ని రాయండి..." />
+          <button type="submit" class="btn">పంపండి</button>
+        </form>
       </div>
     </div>
+  </div>
 
-    <div class="comment-area">
-      <input id="comment-input" placeholder="మీ అభిప్రాయాన్ని రాయండి..." />
-      <button id="comment-send">పంపండి</button>
-    </div>
-  </main>
+  <!-- logger toggle + area -->
+  <button id="logger-toggle">Logger</button>
+  <div id="mini-logger"></div>
 
-  <script type="module" src="/static/js/main.js"></script>
+  <!-- Single JS file (not module) -->
+  <script src="/static/js/main.js"></script>
 </body>
 </html>
-<script>
-window.onerror = function(msg, src, line, col, error) {
-    let box = document.getElementById("error-box");
-    if (!box) {
-        box = document.createElement("div");
-        box.id = "error-box";
-        box.style.position = "fixed";
-        box.style.bottom = "0";
-        box.style.left = "0";
-        box.style.width = "100%";
-        box.style.maxHeight = "200px";
-        box.style.overflowY = "auto";
-        box.style.background = "rgba(0,0,0,0.8)";
-        box.style.color = "yellow";
-        box.style.fontSize = "14px";
-        box.style.padding = "8px";
-        box.style.zIndex = "99999";
-        document.body.appendChild(box);
-    }
-    box.innerHTML = `
-        <b>ERROR:</b> ${msg}<br>
-        <b>File:</b> ${src}<br>
-        <b>Line:</b> ${line}, <b>Col:</b> ${col}<br>
-        <pre>${error && error.stack ? error.stack : ""}</pre>
-    `;
-};
-</script>
