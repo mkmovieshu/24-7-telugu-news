@@ -1,9 +1,9 @@
-/* small animation classes */
-.news-card.slide-up {
-  transform: translateY(-24px);
-  opacity: 0;
-}
-.news-card.slide-down {
-  transform: translateY(24px);
-  opacity: 0;
-}
+/* static/css/styles.css - supplementary tweaks */
+
+.small-note{font-size:12px;color:#8a8a8a}
+.primary.small{padding:8px 10px;border-radius:8px}
+.primary.ghost{background:transparent;border:1px solid rgba(0,0,0,0.06); color: #111}
+
+/* scrollbars small */
+.comments-list::-webkit-scrollbar{width:6px}
+.comments-list::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:6px}
