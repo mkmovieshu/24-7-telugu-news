@@ -1,8 +1,7 @@
-// News list & current index – ఇదే single source of truth
-
+// static/js/state.js
 export const newsState = {
   items: [],
-  index: 0,
+  index: 0
 };
 
 export function setNewsItems(items) {
@@ -11,12 +10,12 @@ export function setNewsItems(items) {
 }
 
 export function getCurrentNews() {
-  if (!newsState.items.length) return null;
+  if (!newsState.items || newsState.items.length === 0) return null;
   return newsState.items[newsState.index];
 }
 
 export function moveNext() {
-  if (!newsState.items.length) return null;
+  if (!newsState.items || newsState.items.length === 0) return null;
   if (newsState.index < newsState.items.length - 1) {
     newsState.index += 1;
   }
@@ -24,7 +23,7 @@ export function moveNext() {
 }
 
 export function movePrev() {
-  if (!newsState.items.length) return null;
+  if (!newsState.items || newsState.items.length === 0) return null;
   if (newsState.index > 0) {
     newsState.index -= 1;
   }
