@@ -1,77 +1,130 @@
 // static/js/swipe.js
-import { moveNext, movePrev } from "./state.js";
-const SWIPE_THRESHOLD = 40; // pixels
-const DIRECTION_LOCK_THRESHOLD = 12;
+import { moveNext, movePrev, getCurrentNews } from "./state.js";
+import { renderNewsCard } from "./render.js";
+import { loadCommentsForCurrent } from "./comments.js";
 
-let startX = 0, startY = 0;
-let locked = false, lockedDirection = null;
-let touching = false;
+/**
+ * initSwipe()
+ * Attach all touch / mouse handlers lazily after DOM is ready.
+ * Exports a single function that main.js calls on DOMContentLoaded.
+ */
 
-function onTouchStart(ev) {
-  touching = true;
-  locked = false;
-  lockedDirection = null;
-  const t = ev.touches ? ev.touches[0] : ev;
-  startX = t.clientX;
-  startY = t.clientY;
-}
-
-function onTouchMove(ev) {
-  if (!touching) return;
-  const t = ev.touches ? ev.touches[0] : ev;
-  const dx = t.clientX - startX;
-  const dy = t.clientY - startY;
-  if (!locked) {
-    if (Math.abs(dx) > DIRECTION_LOCK_THRESHOLD) {
-      locked = true;
-      lockedDirection = "horizontal";
-    } else if (Math.abs(dy) > DIRECTION_LOCK_THRESHOLD) {
-      locked = true;
-      lockedDirection = "vertical";
-    }
-  }
-  if (locked && lockedDirection === "horizontal") {
-    ev.preventDefault();
-  }
-}
-
-function onTouchEnd(ev) {
-  if (!touching) return;
-  touching = false;
-  const t = (ev.changedTouches && ev.changedTouches[0]) || ev;
-  const dx = t.clientX - startX;
-  const dy = t.clientY - startY;
-
-  if (lockedDirection === "vertical") {
-    // user scrolled vertically; ignore horizontal behavior
+export function initSwipe() {
+  const cardEl = document.getElementById("news-card");
+  if (!cardEl) {
+    console.warn("swipe.initSwipe: #news-card not found – swipe disabled");
     return;
   }
-  if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_THRESHOLD) {
-    if (dy < 0) {
-      // swipe up -> next
-      const n = moveNext();
-      // render handled externally by app main
+
+  let startX = 0;
+  let startY = 0;
+  let lastX = 0;
+  let lastY = 0;
+  let tracking = false;
+  let lockedDirection = null;
+
+  const SWIPE_THRESHOLD = 60; // pixels to consider a swipe
+  const DIRECTION_LOCK_THRESHOLD = 12; // pixels to lock axis
+
+  function onStart(e) {
+    tracking = true;
+    lockedDirection = null;
+    const p = (e.touches && e.touches[0]) || e;
+    startX = lastX = p.clientX;
+    startY = lastY = p.clientY;
+  }
+
+  function onMove(e) {
+    if (!tracking) return;
+    const p = (e.touches && e.touches[0]) || e;
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
+
+    if (!lockedDirection) {
+      if (Math.abs(dy) > DIRECTION_LOCK_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+        lockedDirection = "vertical";
+        try { e.preventDefault(); } catch (_) {}
+      } else if (Math.abs(dx) > DIRECTION_LOCK_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+        lockedDirection = "horizontal";
+      }
+    } else if (lockedDirection === "vertical") {
+      try { e.preventDefault(); } catch (_) {}
+    }
+
+    lastX = p.clientX;
+    lastY = p.clientY;
+  }
+
+  function onEnd(e) {
+    if (!tracking) return;
+    tracking = false;
+
+    const changed = (e.changedTouches && e.changedTouches[0]) || {};
+    const endX = changed.clientX || lastX;
+    const endY = changed.clientY || lastY;
+
+    const dy = startY - endY;
+    const dx = startX - endX;
+
+    // if horizontal swipe locked, ignore
+    if (lockedDirection === "horizontal") {
+      lockedDirection = null;
+      return;
+    }
+
+    // small drags ignored
+    if (Math.abs(dy) < SWIPE_THRESHOLD) {
+      lockedDirection = null;
+      return;
+    }
+
+    if (dy > 0) {
+      // swipe up => next
+      const news = moveNext();
+      // moveNext() returns the new current item (or null)
+      renderNewsCard(news, "next");
     } else {
-      const p = movePrev();
+      // swipe down => previous
+      const news = movePrev();
+      renderNewsCard(news, "prev");
     }
-  } else if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD) {
-    // optional: horizontal gestures if needed
-  }
-}
 
-export default function initSwipe() {
-  const card = document.getElementById("news-card");
-  if (!card) {
-    console.warn("initSwipe: no #news-card found");
-    return;
-  }
-  card.addEventListener("touchstart", onTouchStart, { passive: true });
-  card.addEventListener("touchmove", onTouchMove, { passive: false });
-  card.addEventListener("touchend", onTouchEnd, { passive: true });
+    // refresh comments for the newly shown news (if comments module present)
+    try {
+      loadCommentsForCurrent();
+    } catch (err) {
+      // silent — comments optional
+      // console.debug("loadCommentsForCurrent not available:", err);
+    }
 
-  // mouse fallback
-  let mouseDown = false;
-  card.addEventListener("mousedown", (e) => { mouseDown = true; onTouchStart(e); });
-  window.addEventListener("mousemove", (e) => { if (mouseDown) onTouchMove(e); });
-  window.addEventListener("mouseup", (e) => { if (mouseDown) { mouseDown = false; onTouchEnd(e); } });
+    lockedDirection = null;
+  }
+
+  // Touch events
+  cardEl.addEventListener("touchstart", onStart, { passive: true });
+  cardEl.addEventListener("touchmove", onMove, { passive: false });
+  cardEl.addEventListener("touchend", onEnd, { passive: true });
+
+  // Mouse support (desktop)
+  cardEl.addEventListener("mousedown", onStart);
+  cardEl.addEventListener("mousemove", onMove);
+  cardEl.addEventListener("mouseup", onEnd);
+
+  // For keyboard accessibility: up/down arrows
+  cardEl.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const news = moveNext();
+      renderNewsCard(news, "next");
+      try { loadCommentsForCurrent(); } catch (_) {}
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const news = movePrev();
+      renderNewsCard(news, "prev");
+      try { loadCommentsForCurrent(); } catch (_) {}
+    }
+  });
+
+  // make card focusable for keyboard arrows
+  if (!cardEl.hasAttribute("tabindex")) cardEl.setAttribute("tabindex", "0");
 }
