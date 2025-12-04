@@ -1,141 +1,181 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
-from motor.motor_asyncio import AsyncIOMotorClient
-from bson import ObjectId
-
+# app.py
 import os
-from datetime import datetime
+import threading
+import time
+from datetime import datetime, timedelta
+from bson.objectid import ObjectId
+from flask import Flask, jsonify, request, send_from_directory, abort
+from flask_cors import CORS
+from pymongo import MongoClient
+from dotenv import load_dotenv
 
-# -----------------------
-# FastAPI & Templates
-# -----------------------
+# try to use summarize.summarize_item if present
+try:
+    from summarize import summarize_item
+except Exception:
+    def summarize_item(item):
+        if not item:
+            return ""
+        s = item.get("summary") or item.get("raw_summary") or ""
+        if s:
+            return s if len(s) < 800 else s[:800] + "..."
+        title = item.get("title") or ""
+        return (title + " " + s)[:800]
 
-app = FastAPI(title="24/7 Telugu Short News")
+load_dotenv()
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="ui")
+MONGO_URI = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI") or "mongodb://localhost:27017"
+DB_NAME = os.getenv("DB_NAME") or "shortnews"
+COL_NAME = os.getenv("COL_NAME") or "news"
+CLEANUP_INTERVAL_MINUTES = int(os.getenv("CLEANUP_INTERVAL_MINUTES") or 30)
 
-# -----------------------
-# MongoDB
-# -----------------------
+app = Flask(__name__, static_folder="static", template_folder="ui")
+CORS(app)
 
-MONGO_URL = os.getenv("MONGO_URL")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
+# Mongo client
+client = MongoClient(MONGO_URI)
+db = client[DB_NAME]
+collection = db[COL_NAME]
+likes_coll = db.get_collection("likes")
+comments_coll = db.get_collection("comments")
 
-if not MONGO_URL:
-    raise RuntimeError("MONGO_URL environment variable not set")
+# Ensure TTL index for auto-delete after 24h
+try:
+    # if created_at is datetime, expireAfterSeconds will auto-delete
+    collection.create_index("created_at", expireAfterSeconds=86400)
+except Exception as e:
+    app.logger.info("Could not create TTL index or index exists: %s", e)
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[MONGO_DB_NAME]
-news_col = db["news"]
-comments_col = db["comments"]
-
-
-def serialize_news(doc):
+def doc_to_public(doc):
     if not doc:
         return None
-    return {
+    out = {
         "id": str(doc.get("_id")),
-        "title": doc.get("title") or "",
-        "summary": doc.get("summary") or "",
-        "link": doc.get("link") or doc.get("source") or "",
-        "likes": int(doc.get("likes", 0) or 0),
-        "dislikes": int(doc.get("dislikes", 0) or 0),
+        "title": doc.get("title"),
+        "summary": doc.get("summary") or doc.get("raw_summary") or "",
+        "link": doc.get("link"),
+        "published": doc.get("published"),
+        "source": doc.get("source"),
+        "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
+        "image": doc.get("image") if doc.get("image") else ""
     }
+    return out
 
-
-# -----------------------
-# Pages
-# -----------------------
-
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse("app.html", {"request": request})
-
-
-# -----------------------
-# News API
-# -----------------------
-
-@app.get("/news", response_class=JSONResponse)
-async def list_news(limit: int = 100):
-    """
-    Frontend ఒక్కసారి ఈ API‌ను కాల్ చేసి
-    local state‌లోనే swipe next/prev చేస్తుంది.
-    """
-    cursor = news_col.find({}, sort=[("created_at", -1)]).limit(limit)
-    items = [serialize_news(doc) async for doc in cursor]
-    return {"items": items}
-
-
-@app.post("/news/{news_id}/reaction", response_class=JSONResponse)
-async def add_reaction(news_id: str, payload: dict):
-    """
-    Like / Dislike బటన్ల కోసం.
-    payload = { "action": "like" | "dislike" }
-    """
-    action = payload.get("action")
-    if action not in ("like", "dislike"):
-        raise HTTPException(status_code=400, detail="Invalid action")
-
-    field = "likes" if action == "like" else "dislikes"
-
+@app.route("/news", methods=["GET"])
+def get_news():
     try:
-        oid = ObjectId(news_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid news id")
-
-    result = await news_col.update_one({"_id": oid}, {"$inc": {field: 1}})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="News not found")
-
-    doc = await news_col.find_one({"_id": oid})
-    data = serialize_news(doc)
-    return {"likes": data["likes"], "dislikes": data["dislikes"]}
-
-
-# -----------------------
-# Comments API
-# -----------------------
-
-@app.get("/news/{news_id}/comments", response_class=JSONResponse)
-async def get_comments(news_id: str):
+        limit = int(request.args.get("limit", 50))
+    except:
+        limit = 50
     try:
-        oid = ObjectId(news_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid news id")
+        skip = int(request.args.get("skip", 0))
+    except:
+        skip = 0
 
-    cursor = comments_col.find({"news_id": oid}).sort("created_at", -1)
+    cursor = collection.find().sort("created_at", -1).skip(skip).limit(limit)
     items = []
-    async for doc in cursor:
-        items.append(
-            {
-                "id": str(doc["_id"]),
-                "text": doc.get("text", ""),
-                "created_at": doc.get("created_at", datetime.utcnow()).isoformat(),
-            }
-        )
-    return {"items": items}
+    for d in cursor:
+        p = doc_to_public(d)
+        # ensure summary exists, else generate on the fly
+        if not p["summary"]:
+            p["summary"] = summarize_item(d)
+        # likes/dislikes aggregated
+        stat = likes_coll.find_one({"news_id": d["_id"]})
+        p["likes"] = stat.get("likes", 0) if stat else 0
+        p["dislikes"] = stat.get("dislikes", 0) if stat else 0
+        items.append(p)
+    return jsonify({"items": items})
 
+@app.route("/news/<news_id>", methods=["GET"])
+def get_single_news(news_id):
+    try:
+        doc = collection.find_one({"_id": ObjectId(news_id)})
+    except Exception:
+        return abort(404)
+    if not doc:
+        return abort(404)
+    out = doc_to_public(doc)
+    stat = likes_coll.find_one({"news_id": ObjectId(news_id)})
+    out["likes"] = stat.get("likes", 0) if stat else 0
+    out["dislikes"] = stat.get("dislikes", 0) if stat else 0
+    comms = list(comments_coll.find({"news_id": ObjectId(news_id)}).sort("created_at", -1))
+    out["comments"] = [{"text": c.get("text"), "created_at": c.get("created_at").isoformat() if c.get("created_at") else None} for c in comms]
+    return jsonify(out)
 
-@app.post("/news/{news_id}/comments", response_class=JSONResponse)
-async def add_comment(news_id: str, payload: dict):
-    text = (payload.get("text") or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Empty comment")
-
+@app.route("/likes/<news_id>", methods=["POST"])
+def post_like(news_id):
+    body = request.get_json() or {}
+    t = body.get("type", "like")
     try:
         oid = ObjectId(news_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid news id")
+    except:
+        return abort(400)
+    stat = likes_coll.find_one({"news_id": oid})
+    if not stat:
+        likes_coll.insert_one({"news_id": oid, "likes": 0, "dislikes": 0})
+        stat = likes_coll.find_one({"news_id": oid})
+    if t == "like":
+        likes_coll.update_one({"news_id": oid}, {"$inc": {"likes": 1}})
+    else:
+        likes_coll.update_one({"news_id": oid}, {"$inc": {"dislikes": 1}})
+    stat = likes_coll.find_one({"news_id": oid})
+    return jsonify({"likes": stat.get("likes", 0), "dislikes": stat.get("dislikes", 0)})
 
-    doc = {
-        "news_id": oid,
-        "text": text,
-        "created_at": datetime.utcnow(),
-    }
-    res = await comments_col.insert_one(doc)
-    return {"id": str(res.inserted_id)}
+@app.route("/comments/<news_id>", methods=["POST"])
+def post_comment(news_id):
+    body = request.get_json() or {}
+    text = body.get("text", "").strip()
+    if not text:
+        return abort(400)
+    try:
+        oid = ObjectId(news_id)
+    except:
+        return abort(400)
+    doc = {"news_id": oid, "text": text, "created_at": datetime.utcnow()}
+    comments_coll.insert_one(doc)
+    return jsonify({"ok": True, "comment": {"text": text, "created_at": doc["created_at"].isoformat()}})
+
+@app.route("/read/<news_id>")
+def read_more(news_id):
+    try:
+        doc = collection.find_one({"_id": ObjectId(news_id)})
+    except Exception:
+        return abort(404)
+    if not doc:
+        return abort(404)
+    link = doc.get("link")
+    if link:
+        return jsonify({"redirect": link})
+    return abort(404)
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve(path):
+    if path == "" or path == "news":
+        return send_from_directory("ui", "app.html")
+    if path.startswith("static/"):
+        file_path = path[len("static/"):]
+        return send_from_directory("static", file_path)
+    try:
+        return send_from_directory("ui", path)
+    except Exception:
+        return send_from_directory("ui", "app.html")
+
+def cleanup_worker():
+    while True:
+        try:
+            cutoff = datetime.utcnow() - timedelta(hours=24)
+            # delete old news (TTL index handles this too)
+            collection.delete_many({"created_at": {"$lt": cutoff}})
+            # delete comments older than cutoff
+            comments_coll.delete_many({"created_at": {"$lt": cutoff}})
+            # optionally remove likes for non-existing news (non-critical)
+        except Exception as e:
+            app.logger.error("Cleanup error: %s", e)
+        time.sleep(CLEANUP_INTERVAL_MINUTES * 60)
+
+if __name__ == "__main__":
+    t = threading.Thread(target=cleanup_worker, daemon=True)
+    t.start()
+    port = int(os.getenv("PORT", 8000))
+    app.run(host="0.0.0.0", port=port, debug=True)
