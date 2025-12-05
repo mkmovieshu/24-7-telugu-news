@@ -1,75 +1,122 @@
-// static/js/swipe.js
-// Replace your existing swipe.js with this file
-// Assumes you include it as module or normal script after render.js and state.js.
-// If using modules: <script type="module" src="/static/js/swipe.js"></script>
+// /static/js/swipe.js
+// Improved, robust vertical swipe handler for Next / Prev
+// Replaces earlier swipe code. Works on mobile touch & mouse.
+// Requires exported functions from ./state.js and ./render.js:
+//   moveNext(), movePrev(), getCurrentNews() (state.js)
+//   renderNewsCard(item, direction) (render.js)
 
-import { nextNews, prevNews } from './render.js'; // these functions call state.moveNext/movePrev and render
+import { moveNext, movePrev } from "./state.js";
+import { renderNewsCard } from "./render.js";
 
-// If import fails in non-module environment, try fallback to window functions.
-function getFns() {
-  if (typeof nextNews === 'function' && typeof prevNews === 'function') {
-    return { nextNews, prevNews };
-  }
-  // fallback — if render.js attached functions globally:
-  return {
-    nextNews: window.nextNews || function(){ console.warn('nextNews not found'); },
-    prevNews: window.prevNews || function(){ console.warn('prevNews not found'); }
-  };
-}
-
-const { nextNews: doNext, prevNews: doPrev } = getFns();
-
-let startY = 0;
-let startX = 0;
-let tracking = false;
-
-const threshold = 50; // min px for swipe
-const restraint = 100; // max x-axis movement allowed
-
-function touchStart(e) {
-  const t = e.touches ? e.touches[0] : e;
-  startY = t.clientY;
-  startX = t.clientX;
-  tracking = true;
-}
-
-function touchEnd(e) {
-  if (!tracking) return;
-  const t = (e.changedTouches && e.changedTouches[0]) || e;
-  const distY = startY - t.clientY; // positive => swipe up
-  const distX = startX - t.clientX;
-  tracking = false;
-
-  if (Math.abs(distX) > restraint) {
-    // horizontal move — ignore
-    return;
-  }
-  if (Math.abs(distY) < threshold) {
-    // too small
-    return;
-  }
-
-  if (distY > 0) {
-    // swipe up => next
-    try { doNext(); } catch (err) { console.error('doNext failed', err); }
+(function () {
+  // wait for DOM to be ready (module might run before DOM in some setups)
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
   } else {
-    // swipe down => prev
-    try { doPrev(); } catch (err) { console.error('doPrev failed', err); }
+    init();
   }
-}
 
-// attach listeners to document / main card container
-const attachSwipe = (el = document) => {
-  el.addEventListener('touchstart', touchStart, { passive: true });
-  el.addEventListener('touchend', touchEnd, { passive: true });
-  // desktop mouse fallback
-  let mouseDown = false;
-  el.addEventListener('mousedown', (ev) => { mouseDown = true; touchStart(ev); });
-  el.addEventListener('mouseup', (ev) => { if (mouseDown) { mouseDown = false; touchEnd(ev); } });
-};
+  function init() {
+    const card = document.getElementById("news-card");
+    if (!card) {
+      // nothing to attach to — fail silently but log for debugging
+      console.warn("swipe.js: #news-card not found, swipe disabled");
+      return;
+    }
 
-window.addEventListener('DOMContentLoaded', () => {
-  // prefer card container id if available
-  const container = document.getElementById('news-card') || document.getElementById('app-container') || document;
-  attachSwipe(container);
-});
+    let startX = 0,
+      startY = 0,
+      lastX = 0,
+      lastY = 0;
+    let tracking = false;
+    let lockedDirection = null;
+    const DIRECTION_LOCK_THRESHOLD = 10; // px before we lock
+    const SWIPE_THRESHOLD = 60; // px required to count as a swipe
+
+    function getPoint(e) {
+      return (e.touches && e.touches[0]) || e;
+    }
+
+    function onStart(e) {
+      tracking = true;
+      lockedDirection = null;
+      const p = getPoint(e);
+      startX = lastX = p.clientX;
+      startY = lastY = p.clientY;
+    }
+
+    function onMove(e) {
+      if (!tracking) return;
+      const p = getPoint(e);
+      const dx = p.clientX - startX;
+      const dy = p.clientY - startY;
+
+      // decide direction lock
+      if (!lockedDirection) {
+        if (Math.abs(dy) > DIRECTION_LOCK_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+          lockedDirection = "vertical";
+          // prevent browser scroll while we handle vertical swipe
+          try { e.preventDefault(); } catch (_) {}
+        } else if (Math.abs(dx) > DIRECTION_LOCK_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+          lockedDirection = "horizontal";
+        }
+      } else if (lockedDirection === "vertical") {
+        // while vertical locked, prevent default scrolling on touchmove
+        try { e.preventDefault(); } catch (_) {}
+      }
+
+      lastX = p.clientX;
+      lastY = p.clientY;
+    }
+
+    function onEnd(e) {
+      if (!tracking) return;
+      tracking = false;
+
+      const changed = (e.changedTouches && e.changedTouches[0]) || {};
+      const endX = changed.clientX || lastX;
+      const endY = changed.clientY || lastY;
+      const dx = startX - endX;
+      const dy = startY - endY;
+
+      // if user performed a horizontal gesture we ignore here
+      if (lockedDirection === "horizontal") { lockedDirection = null; return; }
+
+      // check large enough vertical swipe
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_THRESHOLD) {
+        if (dy > 0) {
+          // swipe up -> next
+          const item = moveNext();
+          renderNewsCard(item, "next");
+        } else {
+          // swipe down -> prev
+          const item = movePrev();
+          renderNewsCard(item, "prev");
+        }
+      }
+
+      lockedDirection = null;
+    }
+
+    // Attach listeners
+    // touch events (mobile)
+    card.addEventListener("touchstart", onStart, { passive: true });
+    card.addEventListener("touchmove", onMove, { passive: false }); // passive:false so we can preventDefault()
+    card.addEventListener("touchend", onEnd, { passive: true });
+    card.addEventListener("touchcancel", () => { tracking = false; lockedDirection = null; }, { passive: true });
+
+    // mouse fallback for desktop testing
+    let mouseDown = false;
+    card.addEventListener("mousedown", function (e) { mouseDown = true; onStart(e); });
+    window.addEventListener("mousemove", function (e) { if (mouseDown) onMove(e); });
+    window.addEventListener("mouseup", function (e) { if (mouseDown) { mouseDown = false; onEnd(e); } });
+
+    // expose debug helpers on window (optional)
+    try {
+      window._swipeDebug = {
+        simulateNext: () => { const it = moveNext(); renderNewsCard(it, "next"); },
+        simulatePrev: () => { const it = movePrev(); renderNewsCard(it, "prev"); }
+      };
+    } catch (_) {}
+  }
+})();
