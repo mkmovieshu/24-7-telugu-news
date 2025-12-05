@@ -1,4 +1,4 @@
-# fetch_rss.py
+# fetch_rss.py - సరిచేసిన పూర్తి కోడ్ (న్యూస్ ఫీడ్స్ జత చేయబడ్డాయి)
 import os
 import feedparser
 from datetime import datetime
@@ -9,8 +9,14 @@ from bson.objectid import ObjectId
 
 # put your feeds in environment or edit list
 FEEDS = [
-    # Add feed URLs here
-    "https://www.ntnews.com/rss",   # example; replace with real feeds
+    # === మీ నిజమైన తెలుగు న్యూస్ RSS ఫీడ్ లింక్‌లను ఇక్కడ జత చేయండి ===
+    # ఇక్కడ కొన్ని ఉదాహరణ లింక్‌లు ఇవ్వబడ్డాయి, వీటిని మీరు మీ అవసరాలకు అనుగుణంగా మార్చుకోవచ్చు.
+    "https://telugu.samayam.com/rssfeedsdefault.cms", 
+    "https://telugu.news18.com/rss/telugu-news.xml",
+    "https://www.eenadu.net/rss_feed",  
+    
+    # పాత ఉదాహరణ లింక్:
+    "https://www.ntnews.com/rss",   
 ]
 
 def normalize_item(entry):
@@ -70,7 +76,9 @@ def fetch_all():
                 e = normalize_item(entry)
                 upsert_entry(e)
         except Exception as e:
-            print("fetch error for", feed, e)
+            # లోపం ఎందుకు వచ్చిందో తెలుసుకోవడానికి
+            print(f"fetch error for {feed}: {e}") 
 
 if __name__ == "__main__":
     fetch_all()
+    
