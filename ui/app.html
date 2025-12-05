@@ -1,83 +1,35 @@
-{# ui/app.html - replace entire file #}
-<!doctype html>
-<html lang="te">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>24/7 Telugu Short News</title>
-
-    <!-- CSS -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Short News</title>
     <link rel="stylesheet" href="/static/css/app.css" />
     <link rel="stylesheet" href="/static/css/styles.css" />
 
-    <!-- Optional font (if available) -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;600;700&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <header class="header" role="banner">
-      <h1><span style="color:#ffb74d">24/7</span> <span style="color:#ff7043">Telugu</span> Short News</h1>
-      <div class="swipe-label">స్వైప్ చేయండి ↑ / ↓</div>
-    </header>
+    <script defer src="/static/js/api.js"></script>
+    <script defer src="/static/js/state.js"></script>
+    <script defer src="/static/js/render.js"></script>
+    <script defer src="/static/js/swipe.js"></script>
+    <script defer src="/static/js/comments.js"></script>
+    <script defer src="/static/js/likes.js"></script>
+    <script defer src="/static/js/main.js"></script>
+</head>
 
-    <main id="news-container" role="main">
-      <!-- card -->
-      <section class="news-content" id="news-card">
-        <!-- NOTE: removed image/placeholder intentionally (user requested no image) -->
+<body>
+    <div id="app">
+        <div id="news-container"></div>
 
-        <!-- Title + summary -->
-        <h2 id="news-title">న్యూస్ టైటిల్ రాలేదు</h2>
-        <p id="news-summary">న్యూస్ లోడ్ అవుతోంద...</p>
-
-        <!-- read original link -->
-        <a id="original-link" class="original-link" href="#" target="_blank" rel="noopener">Read original</a>
-
-        <!-- nav + reactions row -->
-        <div class="nav-buttons">
-          <div style="display:flex; gap:12px; align-items:center;">
-            <button class="btn-prev" id="btn-prev">Prev</button>
-          </div>
-
-          <div class="reactions" style="margin-left:auto;">
-            <button class="reaction-btn" id="like-btn">👍</button>
-            <div id="like-count">0</div>
-
-            <button class="reaction-btn" id="dislike-btn">👎</button>
-            <div id="dislike-count">0</div>
-
-            <button class="btn-next" id="btn-next" aria-label="Next">Next</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- comments -->
-      <section class="comments-box" id="comments-section" aria-live="polite">
-        <h3 class="comments-title">కామెంట్స్</h3>
-
-        <div class="comments-list" id="comments-list">
-          <!-- comment items injected here -->
+        <div class="bottom-bar">
+            <button id="prev-btn">⬅ Prev</button>
+            <button id="next-btn">Next ➡</button>
         </div>
 
-        <div class="comment-input-area">
-          <input id="comment-input" placeholder="మీ అభిప్రాయాన్ని రాయండి..." autocomplete="off" />
-          <button class="send-btn" id="comment-send">పంపండి</button>
+        <div id="comments-section">
+            <div id="comments-list"></div>
+            <textarea id="comment-input" placeholder="Write a comment..."></textarea>
+            <button id="submit-comment">Post Comment</button>
         </div>
-      </section>
-    </main>
-
-    <footer class="footer">
-      Source summarised by AI • 24–48 hour auto-prune
-    </footer>
-
-    <!-- logger badge (kept hidden by CSS until debug) -->
-    <div class="logger-badge hidden" id="logger-badge">Logger</div>
-
-    <!-- JS (keep same order as before) -->
-    <script type="module" src="/static/js/state.js"></script>
-    <script type="module" src="/static/js/api.js"></script>
-    <script type="module" src="/static/js/render.js"></script>
-    <script type="module" src="/static/js/swipe.js"></script>
-    <script type="module" src="/static/js/comments.js"></script>
-    <script type="module" src="/static/js/likes.js"></script>
-    <script src="/static/js/main.js"></script>
-  </body>
+    </div>
+</body>
 </html>
