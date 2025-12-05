@@ -1,6 +1,6 @@
 # ~/project/app.py - సరిచేసిన పూర్తి కోడ్
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse # JSONResponse ను ఇక్కడ వాడుతున్నాం
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -20,13 +20,13 @@ log = logging.getLogger("shortnews")
 
 app = FastAPI(title="24/7 Telugu Short News")
 
-# 1. BASE_DIR ను నిర్వచించడం (అప్లికేషన్ యొక్క రూట్ డైరెక్టరీ)
+# BASE_DIR ను నిర్వచించడం (అప్లికేషన్ యొక్క రూట్ డైరెక్టరీ)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 2. TEMPLATE_DIR కు ఖచ్చితమైన పాత్ ను సెట్ చేయడం
+# TEMPLATE_DIR కు ఖచ్చితమైన పాత్ ను సెట్ చేయడం
 TEMPLATE_DIR = os.path.join(BASE_DIR, "ui")
 
-# 3. STATIC_DIR కు ఖచ్చితమైన పాత్ ను సెట్ చేయడం
+# STATIC_DIR కు ఖచ్చితమైన పాత్ ను సెట్ చేయడం
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 # StaticFiles మౌంట్ చేయడం
@@ -86,11 +86,16 @@ async def home(request: Request):
 @app.get("/news", response_class=JSONResponse)
 async def list_news(limit: int = 100):
     """
-    Return list of news items. No created_at returned (keeps stable).
+    Return list of news items, ensuring no caching occurs.
     """
     cursor = news_col.find({}, sort=[("created_at", -1)]).limit(limit)
     items = [serialize_news(doc) async for doc in cursor]
-    return {"items": items}
+    
+    # *** ముఖ్యమైన ఫిక్స్: Cache-Control హెడర్‌ను జత చేయడం ***
+    return JSONResponse(
+        content={"items": items},
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"} 
+    )
 
 @app.post("/news/{news_id}/reaction", response_class=JSONResponse)
 async def add_reaction(news_id: str, payload: dict):
