@@ -1,94 +1,75 @@
-// Replace your existing static/js/swipe.js with this exact file.
-// Behaves:
-// - Swipe UP  (finger moves up)  => triggers "Next" button
-// - Swipe DOWN(finger moves down)=> triggers "Prev" button
-// Also supports mouse wheel (optional) for desktops.
+// static/js/swipe.js
+// Replace your existing swipe.js with this file
+// Assumes you include it as module or normal script after render.js and state.js.
+// If using modules: <script type="module" src="/static/js/swipe.js"></script>
 
-(function () {
-  const THRESHOLD = 50; // px minimum to count as swipe
+import { nextNews, prevNews } from './render.js'; // these functions call state.moveNext/movePrev and render
 
-  let startY = null;
-  let startTime = null;
+// If import fails in non-module environment, try fallback to window functions.
+function getFns() {
+  if (typeof nextNews === 'function' && typeof prevNews === 'function') {
+    return { nextNews, prevNews };
+  }
+  // fallback — if render.js attached functions globally:
+  return {
+    nextNews: window.nextNews || function(){ console.warn('nextNews not found'); },
+    prevNews: window.prevNews || function(){ console.warn('prevNews not found'); }
+  };
+}
 
-  function findAndClickButton(nameLower) {
-    // try to find a visible button whose text includes nameLower
-    const buttons = Array.from(document.querySelectorAll("button, a"));
-    for (const b of buttons) {
-      try {
-        const txt = (b.innerText || b.textContent || "").trim().toLowerCase();
-        if (!txt) continue;
-        if (txt.includes(nameLower)) {
-          b.click();
-          return true;
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-    return false;
+const { nextNews: doNext, prevNews: doPrev } = getFns();
+
+let startY = 0;
+let startX = 0;
+let tracking = false;
+
+const threshold = 50; // min px for swipe
+const restraint = 100; // max x-axis movement allowed
+
+function touchStart(e) {
+  const t = e.touches ? e.touches[0] : e;
+  startY = t.clientY;
+  startX = t.clientX;
+  tracking = true;
+}
+
+function touchEnd(e) {
+  if (!tracking) return;
+  const t = (e.changedTouches && e.changedTouches[0]) || e;
+  const distY = startY - t.clientY; // positive => swipe up
+  const distX = startX - t.clientX;
+  tracking = false;
+
+  if (Math.abs(distX) > restraint) {
+    // horizontal move — ignore
+    return;
+  }
+  if (Math.abs(distY) < threshold) {
+    // too small
+    return;
   }
 
-  function onTouchStart(e) {
-    if (!e.touches || e.touches.length === 0) return;
-    startY = e.touches[0].clientY;
-    startTime = Date.now();
+  if (distY > 0) {
+    // swipe up => next
+    try { doNext(); } catch (err) { console.error('doNext failed', err); }
+  } else {
+    // swipe down => prev
+    try { doPrev(); } catch (err) { console.error('doPrev failed', err); }
   }
+}
 
-  function onTouchEnd(e) {
-    if (startY === null) return;
-    // if changedTouches present
-    const touch = (e.changedTouches && e.changedTouches[0]) || null;
-    const endY = touch ? touch.clientY : null;
-    if (endY === null) {
-      startY = null;
-      return;
-    }
-    const dy = endY - startY;
-    const dt = Date.now() - (startTime || Date.now());
+// attach listeners to document / main card container
+const attachSwipe = (el = document) => {
+  el.addEventListener('touchstart', touchStart, { passive: true });
+  el.addEventListener('touchend', touchEnd, { passive: true });
+  // desktop mouse fallback
+  let mouseDown = false;
+  el.addEventListener('mousedown', (ev) => { mouseDown = true; touchStart(ev); });
+  el.addEventListener('mouseup', (ev) => { if (mouseDown) { mouseDown = false; touchEnd(ev); } });
+};
 
-    // quick swipe guard: require some movement
-    if (Math.abs(dy) < THRESHOLD) {
-      startY = null;
-      return;
-    }
-
-    if (dy < 0) {
-      // finger moved up (swipe up) => Next
-      const clicked = findAndClickButton("next") || findAndClickButton("నెక్స్ట్") || findAndClickButton("మరింత");
-      // fallback: call window.nextArticle() if exists
-      if (!clicked && typeof window.nextArticle === "function") window.nextArticle();
-    } else {
-      // finger moved down (swipe down) => Prev
-      const clicked = findAndClickButton("prev") || findAndClickButton("prev") || findAndClickButton("పీవ్యూ") || findAndClickButton("prev");
-      if (!clicked && typeof window.prevArticle === "function") window.prevArticle();
-    }
-
-    startY = null;
-  }
-
-  // wheel support: scroll up/down -> next/prev (optional)
-  function onWheel(e) {
-    // ignore if ctrl/shift pressed
-    if (e.ctrlKey || e.shiftKey || e.metaKey) return;
-    if (Math.abs(e.deltaY) < 10) return;
-    if (e.deltaY > 0) {
-      // scroll down -> show Prev (per your request: down swipe => prev)
-      findAndClickButton("prev") || (typeof window.prevArticle === "function" && window.prevArticle());
-    } else {
-      // scroll up -> show Next
-      findAndClickButton("next") || (typeof window.nextArticle === "function" && window.nextArticle());
-    }
-  }
-
-  // attach listeners to the main content area if exists, otherwise document
-  const mount = document.querySelector("main") || document.querySelector("#app") || document;
-
-  mount.addEventListener("touchstart", onTouchStart, { passive: true });
-  mount.addEventListener("touchend", onTouchEnd, { passive: true });
-  // wheel on desktop
-  mount.addEventListener("wheel", onWheel, { passive: true });
-
-  // small helpful log to confirm file loaded (remove later if you want)
-  console.info("swipe.js loaded — swipe up => NEXT, swipe down => PREV");
-
-})();
+window.addEventListener('DOMContentLoaded', () => {
+  // prefer card container id if available
+  const container = document.getElementById('news-card') || document.getElementById('app-container') || document;
+  attachSwipe(container);
+});
