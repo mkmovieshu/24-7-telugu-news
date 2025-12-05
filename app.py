@@ -46,7 +46,6 @@ if not MONGO_URL:
     raise RuntimeError("MONGO_URL environment variable not set")
 
 client = AsyncIOMotorClient(MONGO_URL)
-# అక్షరదోషం సరిచేయబడింది: MONGO_DB_DB_NAME కు బదులుగా MONGO_DB_NAME ను వాడండి
 db = client[MONGO_DB_NAME] 
 news_col = db["news"]
 comments_col = db["comments"]
@@ -91,7 +90,7 @@ async def list_news(limit: int = 100):
     cursor = news_col.find({}, sort=[("created_at", -1)]).limit(limit)
     items = [serialize_news(doc) async for doc in cursor]
     
-    # *** ముఖ్యమైన ఫిక్స్: Cache-Control హెడర్‌ను జత చేయడం ***
+    # *** Cache-Control హెడర్‌ను సెట్ చేయడం - కొత్త వార్తల కోసం తప్పనిసరి ***
     return JSONResponse(
         content={"items": items},
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"} 
