@@ -45,8 +45,6 @@ import {
     if(type==='error') console.error(msg); else console.log(msg);
   }
 
-  // >>>>>> పాత fetchJSON ఫంక్షన్ తొలగించబడింది <<<<<<
-
   // ======= UI renderers (No change) =======
   function renderCard(){
     if(!newsList || newsList.length===0){
