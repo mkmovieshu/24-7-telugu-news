@@ -1,0 +1,9 @@
+/* small animation classes */
+.news-card.slide-up {
+  transform: translateY(-24px);
+  opacity: 0;
+}
+.news-card.slide-down {
+  transform: translateY(24px);
+  opacity: 0;
+}
