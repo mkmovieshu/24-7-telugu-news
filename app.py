@@ -15,13 +15,25 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("shortnews")
 
 # -----------------------
-# FastAPI & Templates
+# FastAPI & Templates - FIXED PATHS
 # -----------------------
 
 app = FastAPI(title="24/7 Telugu Short News")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="ui")
+# 1. BASE_DIR ను నిర్వచించడం (అప్లికేషన్ యొక్క రూట్ డైరెక్టరీ)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 2. TEMPLATE_DIR కు ఖచ్చితమైన పాత్ ను సెట్ చేయడం
+TEMPLATE_DIR = os.path.join(BASE_DIR, "ui")
+
+# 3. STATIC_DIR కు ఖచ్చితమైన పాత్ ను సెట్ చేయడం
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# StaticFiles మౌంట్ చేయడం
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# Jinja2Templates కు TEMPLATE_DIR ను పంపడం
+templates = Jinja2Templates(directory=TEMPLATE_DIR) 
 
 # -----------------------
 # MongoDB
@@ -34,7 +46,7 @@ if not MONGO_URL:
     raise RuntimeError("MONGO_URL environment variable not set")
 
 client = AsyncIOMotorClient(MONGO_URL)
-db = client[MONGO_DB_NAME]
+db = client[MONGO_DB_DB_NAME]
 news_col = db["news"]
 comments_col = db["comments"]
 
@@ -163,3 +175,4 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     log.info("App shutdown")
+    
