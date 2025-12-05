@@ -1,6 +1,15 @@
 // static/js/api.js
 // simple ES module with named exports used by other modules
-
+// static/js/api.js
+export async function fetchNews(limit = 100) {
+  const url = `/news?limit=${encodeURIComponent(limit)}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) {
+    const txt = await res.text().catch(()=>null);
+    throw new Error('API error ' + res.status + (txt ? ': ' + txt : ''));
+  }
+  return res.json();
+}
 export async function fetchNews(limit = 50) {
   const res = await fetch(`/news?limit=${encodeURIComponent(limit)}`);
   if (!res.ok) throw new Error(`fetchNews failed: ${res.status}`);
