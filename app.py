@@ -1,4 +1,4 @@
-# ~/project/app.py
+# ~/project/app.py - సరిచేసిన పూర్తి కోడ్
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -46,7 +46,8 @@ if not MONGO_URL:
     raise RuntimeError("MONGO_URL environment variable not set")
 
 client = AsyncIOMotorClient(MONGO_URL)
-db = client[MONGO_DB_DB_NAME]
+# అక్షరదోషం సరిచేయబడింది: MONGO_DB_DB_NAME కు బదులుగా MONGO_DB_NAME ను వాడండి
+db = client[MONGO_DB_NAME] 
 news_col = db["news"]
 comments_col = db["comments"]
 
