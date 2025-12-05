@@ -1,6 +1,5 @@
-// static/js/main.js
-// api.js నుండి API ఫంక్షన్‌లను ఇంపోర్ట్ చేయండి
-import { fetchNews, postReaction, fetchComments, postComment } from './api.js'; 
+// static/js/main.js - పూర్తిగా సరిచేసిన కోడ్
+import { fetchNews as apiFetchNews, postReaction as apiPostReaction, fetchComments as apiFetchComments, postComment as apiPostComment } from './api.js'; 
 
 (function(){
   // ======= config =======
@@ -10,7 +9,7 @@ import { fetchNews, postReaction, fetchComments, postComment } from './api.js';
   let newsList = [];
   let idx = 0;
 
-  // ======= DOM refs =======
+  // ======= DOM refs (No change) =======
   const titleEl = document.getElementById('news-title');
   const summaryEl = document.getElementById('news-summary');
   const linkEl = document.getElementById('news-link');
@@ -43,7 +42,7 @@ import { fetchNews, postReaction, fetchComments, postComment } from './api.js';
 
   // >>>>>> పాత fetchJSON ఫంక్షన్ తొలగించబడింది <<<<<<
 
-  // ======= UI renderers =======
+  // ======= UI renderers (No change) =======
   function renderCard(){
     if(!newsList || newsList.length===0){
       titleEl.textContent = "టైటిల్ లేదు";
@@ -80,14 +79,12 @@ import { fetchNews, postReaction, fetchComments, postComment } from './api.js';
   // ======= backend actions (MODIFIED to use api.js imports) =======
   async function loadNews(){
     try{
-      // MODIFIED: Use fetchNews from api.js
-      const data = await fetchNews(NEWS_LIMIT); 
+      // MODIFIED: Use apiFetchNews (imported function)
+      const data = await apiFetchNews(NEWS_LIMIT); 
       
-      // backend returns { items: [...] } as seen earlier
       const items = data.items || [];
-      // normalize: ensure id, title, summary, link, likes, dislikes
       newsList = items.map(it=>({
-        id: it.id || '', // simplified based on app.py logic
+        id: it.id || '', 
         title: it.title || '',
         summary: it.summary || '',
         link: it.link || it.source || '',
@@ -108,8 +105,8 @@ import { fetchNews, postReaction, fetchComments, postComment } from './api.js';
     if(!newsList[idx] || !newsList[idx].id) { log('error','no news id'); return; }
     const id = newsList[idx].id;
     try{
-      // MODIFIED: Use postReaction from api.js
-      const res = await postReaction(id, action);
+      // MODIFIED: Use apiPostReaction (imported function)
+      const res = await apiPostReaction(id, action);
       
       // update local
       newsList[idx].likes = res.likes;
@@ -118,7 +115,7 @@ import { fetchNews, postReaction, fetchComments, postComment } from './api.js';
       dislikesCountEl.textContent = newsList[idx].dislikes;
     }catch(err){
       log('error','postReaction error: ' + (err.message||err));
-      alert('Reaction తప్పిపోయింది: '+err.message);
+      alert('Reaction తప్పిపోయింది: '+ (err.message||err));
     }
   }
 
@@ -128,8 +125,8 @@ import { fetchNews, postReaction, fetchComments, postComment } from './api.js';
     if(!newsList[idx] || !newsList[idx].id) return;
     const id = newsList[idx].id;
     try{
-      // MODIFIED: Use fetchComments from api.js
-      const data = await fetchComments(id);
+      // MODIFIED: Use apiFetchComments (imported function)
+      const data = await apiFetchComments(id);
       
       const items = (data.items || []);
       commentsCountEl.textContent = items.length;
@@ -154,15 +151,15 @@ import { fetchNews, postReaction, fetchComments, postComment } from './api.js';
     if(!text || !text.trim()){ alert('ఖాళీ కామెంట్ పంప్వద్దు'); return; }
     const id = newsList[idx].id;
     try{
-      // MODIFIED: Use postComment from api.js
-      const res = await postComment(id, text);
+      // MODIFIED: Use apiPostComment (imported function)
+      const res = await apiPostComment(id, text);
       
       // add to local render immediately by reloading comments
       commentInput.value = '';
       await loadCommentsForCurrent();
     }catch(err){
       log('error','postComment error: '+err.message);
-      alert('కామెంట్ పంపడంలో లోపం: '+err.message);
+      alert('కామెంట్ పంపడంలో లోపం: '+ (err.message||err));
     }
   }
 
