@@ -1,0 +1,39 @@
+/* app.css - basic styles */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica", Arial, sans-serif;
+  background: #fffdf7;
+  color: #222;
+  -webkit-font-smoothing: antialiased;
+}
+.app-header {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px;
+  border-bottom:1px solid #eee;
+}
+.logo { font-size:24px }
+main#app {
+  padding: 16px;
+}
+.news-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  transition: transform 300ms ease, opacity 300ms ease;
+  will-change: transform, opacity;
+}
+.controls {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-top:12px;
+}
+.big-btn {
+  background:#0057ff;color:#fff;padding:8px 12px;border:none;border-radius:6px;
+}
+.reactions button { margin-left:6px; }
+.comment-area { margin-top:12px; display:flex; gap:6px; }
+.comment-area input { flex:1; padding:8px; border-radius:6px; border:1px solid #ddd; }
