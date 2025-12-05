@@ -1,9 +1,80 @@
-/* small animation classes */
+/* static/css/styles.css - అదనపు స్టైల్స్ */
 .news-card.slide-up {
-  transform: translateY(-24px);
-  opacity: 0;
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .news-card.slide-down {
-  transform: translateY(24px);
-  opacity: 0;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ఫ్లోటింగ్ యాక్షన్ బటన్స్ */
+.floating-actions {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  z-index: 1000;
+}
+
+.floating-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--insta-gradient);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(255, 55, 95, 0.3);
+  transition: all 0.3s;
+}
+
+.floating-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 30px rgba(255, 55, 95, 0.4);
+}
+
+/* ప్రోగ్రెస్ బార్ */
+.progress-bar {
+  height: 3px;
+  background: var(--happy-border);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1001;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--insta-gradient);
+  width: 0%;
+  transition: width 0.3s ease;
 }
