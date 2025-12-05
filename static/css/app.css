@@ -33,12 +33,20 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
   min-height: 100vh;
+  padding: 0;
+}
+
+.wrap {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0;
 }
 
 /* హెడర్ - Happy లాగా */
-.app-header {
+.header {
   background: var(--happy-card);
   border-bottom: 1px solid var(--happy-border);
+  padding: 20px;
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -46,358 +54,381 @@ body {
   background: rgba(255, 255, 255, 0.95);
 }
 
-.header-content {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 15px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--happy-red);
-  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
-.logo-icon {
-  width: 32px;
-  height: 32px;
+.logo::before {
+  content: "📰";
   background: var(--insta-gradient);
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 20px;
+  font-size: 24px;
 }
 
-/* Instagram లాగా న్యూస్ కార్డ్ */
-.news-card {
+/* Instagram లాగా కార్డ్ */
+.card {
   background: var(--happy-card);
   border-radius: 20px;
   overflow: hidden;
-  margin-bottom: 20px;
+  margin: 20px;
+  padding: 0;
   box-shadow: var(--card-shadow);
   border: 1px solid var(--happy-border);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
 }
 
-.news-card:hover {
+.card:hover {
   transform: translateY(-5px);
   box-shadow: var(--hover-shadow);
 }
 
-/* కార్డ్ హెడర్ - Instagram లాగా */
-.card-header {
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--happy-border);
-}
-
-.source-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--insta-gradient);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: bold;
-  font-size: 18px;
-}
-
-.source-info {
-  flex: 1;
-}
-
-.source-name {
-  font-weight: 600;
-  color: var(--happy-text);
-  display: block;
-}
-
-.source-time {
-  font-size: 13px;
-  color: var(--happy-text-light);
-}
-
 /* కార్డ్ కంటెంట్ */
-.card-content {
-  padding: 20px;
-}
-
-.news-title {
-  font-size: 22px;
+.title {
+  font-size: 24px;
   font-weight: 700;
   color: var(--happy-text);
-  margin-bottom: 15px;
+  margin: 0;
+  padding: 25px 25px 15px 25px;
   line-height: 1.4;
 }
 
-.news-summary {
-  font-size: 16px;
+.summary {
+  font-size: 17px;
   color: var(--happy-text-light);
   line-height: 1.7;
-  margin-bottom: 20px;
+  padding: 0 25px 20px 25px;
+  margin: 0;
 }
 
-/* కార్డ్ ఇమేజ్ */
-.card-image {
-  width: 100%;
-  height: 300px;
-  overflow: hidden;
-  position: relative;
-}
-
-.card-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.5s ease;
-}
-
-.news-card:hover .card-image img {
-  transform: scale(1.05);
-}
-
-/* Instagram లాగా యాక్షన్ బటన్స్ */
-.card-actions {
-  padding: 0 20px 20px;
-  display: flex;
+/* సోర్స్ లింక్ */
+a[href^="http"] {
+  color: var(--happy-red);
+  text-decoration: none;
+  display: inline-flex;
   align-items: center;
-  gap: 20px;
-  border-top: 1px solid var(--happy-border);
-  padding-top: 15px;
+  gap: 8px;
+  padding: 10px 20px;
+  margin: 0 25px 25px 25px;
+  background: rgba(255, 55, 95, 0.1);
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 0.3s;
 }
 
-.action-btn {
-  background: none;
+a[href^="http"]:hover {
+  background: rgba(255, 55, 95, 0.2);
+  transform: translateY(-2px);
+}
+
+/* కంట్రోల్స్ - Instagram లాగా */
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 25px;
+  border-top: 1px solid var(--happy-border);
+  margin-top: 0;
+}
+
+.nav {
+  display: flex;
+  gap: 12px;
+}
+
+.btn {
+  padding: 12px 24px;
   border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 16px;
-  color: var(--happy-text-light);
-  cursor: pointer;
-  transition: all 0.2s;
-  padding: 8px;
-  border-radius: 10px;
 }
 
-.action-btn:hover {
+.btn.secondary {
   background: var(--happy-bg);
-  color: var(--happy-red);
+  color: var(--happy-text-light);
+  border: 1px solid var(--happy-border);
 }
 
-.action-btn.liked {
-  color: var(--happy-red);
+.btn.secondary:hover {
+  background: var(--happy-border);
+  transform: translateY(-2px);
 }
 
-.action-btn .icon {
+.btn:not(.secondary) {
+  background: var(--insta-gradient);
+  color: white;
+}
+
+.btn:not(.secondary):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 55, 95, 0.3);
+}
+
+/* లైక్స్ బాక్స్ - Happy లాగా */
+.likes-box {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-left: auto;
+}
+
+#likeBtn, #dislikeBtn {
+  background: none;
+  border: none;
   font-size: 24px;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 10px;
+  transition: all 0.2s;
 }
 
-.action-btn .count {
-  font-weight: 600;
-  font-size: 14px;
+#likeBtn:hover, #dislikeBtn:hover {
+  background: var(--happy-bg);
+  transform: scale(1.1);
 }
 
-/* స్వైప్ ఇండికేటర్స్ */
-.swipe-indicator {
+.count {
+  background: var(--happy-card);
+  border: 1px solid var(--happy-border);
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  color: var(--happy-text);
+  min-width: 50px;
   text-align: center;
-  padding: 20px;
-  color: var(--happy-text-light);
-  font-size: 14px;
-}
-
-.swipe-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.swipe-arrow {
-  animation: bounce 2s infinite;
-}
-
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-
-/* లోడింగ్ స్పిన్నర్ */
-.loading-spinner {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 60px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--happy-border);
-  border-top-color: var(--happy-red);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ఎమ్ప్టీ స్టేట్ */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--happy-text-light);
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 20px;
-  color: var(--happy-border);
 }
 
 /* కామెంట్స్ సెక్షన్ - Instagram లాగా */
-.comments-section {
+.comments {
   background: var(--happy-bg);
   border-radius: 15px;
-  margin-top: 20px;
-  padding: 20px;
+  margin: 20px;
+  padding: 25px;
   border: 1px solid var(--happy-border);
 }
 
-.comment-item {
-  display: flex;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--happy-border);
-}
-
-.comment-item:last-child {
-  border-bottom: none;
-}
-
-.comment-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--insta-gradient);
+.comments strong {
+  color: var(--happy-text);
+  font-size: 18px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: white;
+  gap: 10px;
+}
+
+.comments strong::before {
+  content: "💬";
+}
+
+.sm {
   font-size: 14px;
-  flex-shrink: 0;
-}
-
-.comment-content {
-  flex: 1;
-}
-
-.comment-text {
-  color: var(--happy-text);
-  margin-bottom: 5px;
-}
-
-.comment-time {
-  font-size: 12px;
   color: var(--happy-text-light);
 }
 
-/* కామెంట్ ఇన్పుట్ - Instagram లాగా */
-.comment-input-container {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
+.comment-list {
+  margin: 20px 0;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
-.comment-input {
+.comment {
+  background: var(--happy-card);
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--happy-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.comment div:first-child {
+  color: var(--happy-text);
   flex: 1;
-  padding: 12px 16px;
+}
+
+.comment div:last-child {
+  color: var(--happy-text-light);
+  font-size: 12px;
+  white-space: nowrap;
+  margin-left: 15px;
+}
+
+/* కామెంట్ ఫార్మ్ - Instagram లాగా */
+form {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+input[type="text"] {
+  flex: 1;
+  padding: 14px 20px;
   border: 1px solid var(--happy-border);
   border-radius: 25px;
   background: var(--happy-card);
-  font-size: 14px;
+  font-size: 15px;
   transition: all 0.2s;
 }
 
-.comment-input:focus {
+input[type="text"]:focus {
   outline: none;
   border-color: var(--happy-red);
   box-shadow: 0 0 0 3px rgba(255, 55, 95, 0.1);
 }
 
-.comment-submit {
+form .btn {
   background: var(--insta-gradient);
   color: white;
-  border: none;
   border-radius: 25px;
-  padding: 0 25px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+  padding: 14px 30px;
 }
 
-.comment-submit:hover {
-  transform: scale(1.05);
+/* స్వైప్ ఇండికేటర్ */
+.swipe-hint {
+  text-align: center;
+  padding: 20px;
+  color: var(--happy-text-light);
+  font-size: 14px;
+  border-bottom: 1px solid var(--happy-border);
+}
+
+.swipe-hint::before {
+  content: "⬆️";
+  display: block;
+  font-size: 24px;
+  margin-bottom: 10px;
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* లోడర్ */
+#mini-logger {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99999;
+  max-height: 28vh;
+  overflow: auto;
+  background: rgba(26, 26, 26, 0.95);
+  color: #ffd;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 10px;
+  display: none;
+  border-top: 1px solid var(--happy-border);
+}
+
+#logger-toggle {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 999999;
+  padding: 12px 20px;
+  background: var(--insta-gradient);
+  color: white;
+  border-radius: 25px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(255, 55, 95, 0.3);
+  transition: all 0.3s;
+}
+
+#logger-toggle:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 30px rgba(255, 55, 95, 0.4);
 }
 
 /* రెస్పాన్సివ్ డిజైన్ */
 @media (max-width: 768px) {
-  .header-content {
-    padding: 12px 16px;
+  .wrap {
+    padding: 0;
+  }
+  
+  .header {
+    padding: 15px;
   }
   
   .logo {
-    font-size: 20px;
+    font-size: 22px;
   }
   
-  .news-title {
-    font-size: 20px;
+  .card {
+    margin: 15px;
   }
   
-  .card-image {
-    height: 250px;
+  .title {
+    font-size: 22px;
+    padding: 20px 20px 12px 20px;
   }
   
-  .card-actions {
+  .summary {
+    font-size: 16px;
+    padding: 0 20px 15px 20px;
+  }
+  
+  .controls {
+    padding: 15px 20px;
+    flex-direction: column;
     gap: 15px;
   }
   
-  .action-btn {
-    font-size: 14px;
+  .likes-box {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .comments {
+    margin: 15px;
+    padding: 20px;
   }
 }
 
 @media (max-width: 480px) {
-  .news-title {
-    font-size: 18px;
+  .logo {
+    font-size: 20px;
   }
   
-  .card-image {
-    height: 200px;
+  .title {
+    font-size: 20px;
   }
   
-  .card-actions {
-    justify-content: space-between;
+  .btn {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+  
+  .nav {
+    width: 100%;
+  }
+  
+  .nav .btn {
+    flex: 1;
+    justify-content: center;
   }
 }
 
-/* డార్క్ మోడ్ సపోర్ట్ */
+/* డార్క్ మోడ్ */
 @media (prefers-color-scheme: dark) {
   :root {
     --happy-bg: #0A0A0A;
@@ -411,8 +442,19 @@ body {
     background: var(--happy-bg);
   }
   
-  .app-header {
+  .header {
     background: rgba(26, 26, 26, 0.95);
     border-bottom-color: var(--happy-border);
   }
+  
+  .count {
+    background: #2A2A2A;
+    border-color: #444;
   }
+  
+  input[type="text"] {
+    background: #2A2A2A;
+    border-color: #444;
+    color: white;
+  }
+}
