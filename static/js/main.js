@@ -1,5 +1,10 @@
-// static/js/main.js - పూర్తిగా సరిచేసిన కోడ్
-import { fetchNews as apiFetchNews, postReaction as apiPostReaction, fetchComments as apiFetchComments, postComment as apiPostComment } from './api.js'; 
+// static/js/main.js - సరిచేసిన కోడ్ (Recursion ఫిక్స్ చేయబడింది)
+import { 
+  fetchNews as apiFetchNews, 
+  postReaction as apiPostReaction, 
+  fetchComments as apiFetchComments, 
+  postComment as apiPostComment 
+} from './api.js'; 
 
 (function(){
   // ======= config =======
