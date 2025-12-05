@@ -1,49 +1,27 @@
-// static/js/api.js
-// simple ES module with named exports used by other modules
-// static/js/api.js
-export async function fetchNews(limit = 100) {
-  const url = `/news?limit=${encodeURIComponent(limit)}`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    const txt = await res.text().catch(()=>null);
-    throw new Error('API error ' + res.status + (txt ? ': ' + txt : ''));
-  }
-  return res.json();
-}
-export async function fetchNews(limit = 50) {
-  const res = await fetch(`/news?limit=${encodeURIComponent(limit)}`);
-  if (!res.ok) throw new Error(`fetchNews failed: ${res.status}`);
-  return res.json();
+export async function fetchNews() {
+    const res = await fetch("/news?limit=100");
+    return res.json();
 }
 
-export async function postReaction(newsId, action) {
-  const res = await fetch(`/news/${newsId}/reaction`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action })
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`postReaction failed ${res.status}: ${text}`);
-  }
-  return res.json();
+export async function fetchComments(id) {
+    const res = await fetch(`/news/${id}/comments`);
+    return res.json();
 }
 
-export async function fetchComments(newsId) {
-  const res = await fetch(`/news/${newsId}/comments`);
-  if (!res.ok) throw new Error(`fetchComments failed: ${res.status}`);
-  return res.json();
+export async function postComment(id, text) {
+    const res = await fetch(`/news/${id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+    });
+    return res.json();
 }
 
-export async function postComment(newsId, text) {
-  const res = await fetch(`/news/${newsId}/comments`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text })
-  });
-  if (!res.ok) {
-    const textBody = await res.text();
-    throw new Error(`postComment failed ${res.status}: ${textBody}`);
-  }
-  return res.json();
+export async function postReaction(id, action) {
+    const res = await fetch(`/news/${id}/reaction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+    });
+    return res.json();
 }
