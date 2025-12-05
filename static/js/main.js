@@ -1,7 +1,9 @@
 // static/js/main.js
+// api.js నుండి API ఫంక్షన్‌లను ఇంపోర్ట్ చేయండి
+import { fetchNews, postReaction, fetchComments, postComment } from './api.js'; 
+
 (function(){
   // ======= config =======
-  const API_BASE = ''; // same origin (fastapi app serves)
   const NEWS_LIMIT = 100;
 
   // ======= state =======
@@ -39,19 +41,7 @@
     if(type==='error') console.error(msg); else console.log(msg);
   }
 
-  // helper fetch JSON (with logging)
-  async function fetchJSON(url, opts){
-    log('info', `fetch ${url} ${opts?JSON.stringify(opts):''}`);
-    const res = await fetch(url, opts);
-    let bodyText;
-    try{ bodyText = await res.clone().text(); }catch(e){ bodyText = ''; }
-    log('info', `resp ${res.status} ${bodyText.slice(0,800)}`);
-    if(!res.ok){
-      const text = await res.text().catch(()=>(''));
-      throw new Error(`HTTP ${res.status} - ${text}`);
-    }
-    return res.json().catch(()=>{ return bodyText ? JSON.parse(bodyText) : {}; });
-  }
+  // >>>>>> పాత fetchJSON ఫంక్షన్ తొలగించబడింది <<<<<<
 
   // ======= UI renderers =======
   function renderCard(){
@@ -87,15 +77,17 @@
     renderCard();
   }
 
-  // ======= backend actions =======
+  // ======= backend actions (MODIFIED to use api.js imports) =======
   async function loadNews(){
     try{
-      const data = await fetchJSON(`/news?limit=${NEWS_LIMIT}`, { method: 'GET' });
+      // MODIFIED: Use fetchNews from api.js
+      const data = await fetchNews(NEWS_LIMIT); 
+      
       // backend returns { items: [...] } as seen earlier
       const items = data.items || [];
       // normalize: ensure id, title, summary, link, likes, dislikes
       newsList = items.map(it=>({
-        id: it.id || it._id || '',
+        id: it.id || '', // simplified based on app.py logic
         title: it.title || '',
         summary: it.summary || '',
         link: it.link || it.source || '',
@@ -116,12 +108,9 @@
     if(!newsList[idx] || !newsList[idx].id) { log('error','no news id'); return; }
     const id = newsList[idx].id;
     try{
-      const payload = { action: action === 'like' ? 'like' : 'dislike' };
-      const res = await fetchJSON(`/news/${id}/reaction`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
+      // MODIFIED: Use postReaction from api.js
+      const res = await postReaction(id, action);
+      
       // update local
       newsList[idx].likes = res.likes;
       newsList[idx].dislikes = res.dislikes;
@@ -139,7 +128,9 @@
     if(!newsList[idx] || !newsList[idx].id) return;
     const id = newsList[idx].id;
     try{
-      const data = await fetchJSON(`/news/${id}/comments`, { method: 'GET' });
+      // MODIFIED: Use fetchComments from api.js
+      const data = await fetchComments(id);
+      
       const items = (data.items || []);
       commentsCountEl.textContent = items.length;
       if(items.length===0){
@@ -163,11 +154,9 @@
     if(!text || !text.trim()){ alert('ఖాళీ కామెంట్ పంప్వద్దు'); return; }
     const id = newsList[idx].id;
     try{
-      const res = await fetchJSON(`/news/${id}/comments`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ text: text })
-      });
+      // MODIFIED: Use postComment from api.js
+      const res = await postComment(id, text);
+      
       // add to local render immediately by reloading comments
       commentInput.value = '';
       await loadCommentsForCurrent();
