@@ -11,9 +11,11 @@ from bson.objectid import ObjectId
 FEEDS = [
     # === మీ నిజమైన తెలుగు న్యూస్ RSS ఫీడ్ లింక్‌లను ఇక్కడ జత చేయండి ===
     # ఇక్కడ కొన్ని ఉదాహరణ లింక్‌లు ఇవ్వబడ్డాయి, వీటిని మీరు మీ అవసరాలకు అనుగుణంగా మార్చుకోవచ్చు.
-    "https://telugu.samayam.com/rssfeedsdefault.cms", 
-    "https://telugu.news18.com/rss/telugu-news.xml",
-    "https://www.eenadu.net/rss_feed",  
+    "https://www.hindustantimes.com/feeds/rss/entertainment/telugu-cinema/rssfeed.xml", 
+    "https://www.evarthalu.com/te-in/rss/e-news/telangana?type=rss",
+    "https://www.teluguone.com/news/tonefeeds/latestnews/latestnews-25.rss",
+    "https://www.teluguone.com/news/tonefeeds/technology/technology-33.rss",
+    "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
     
     # పాత ఉదాహరణ లింక్:
     "https://www.ntnews.com/rss",   
