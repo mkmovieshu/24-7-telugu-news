@@ -33,9 +33,7 @@ MONGO_URL = os.getenv("MONGO_URL")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
 
 if not MONGO_URL:
-    # ఇది Render లో MONGO_URL సెట్ చేయకపోతే మాత్రమే ట్రిగ్గర్ అవుతుంది
     log.error("MONGO_URL environment variable not set")
-    # raise RuntimeError("MONGO_URL environment variable not set") # Runtime error ని నివారించడానికి
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[MONGO_DB_NAME]
@@ -43,7 +41,7 @@ news_col = db["news"]
 comments_col = db["comments"]
 
 # -----------------------
-# Helpers (No change)
+# Helpers
 # -----------------------
 
 def serialize_news(doc):
@@ -88,7 +86,6 @@ def run_fetch_rss_script():
 async def trigger_fetch():
     """
     Triggers the fetch_rss.py script in a background thread to avoid blocking the main web server.
-    NOTE: Change this URL to a long, hard-to-guess string for security.
     """
     threading.Thread(target=run_fetch_rss_script).start()
     log.info("Fetch triggered by external source.")
@@ -116,11 +113,10 @@ async def list_news(limit: int = 100):
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 
-# ... (Reaction and Comment endpoints remain the same, as per user's old code) ...
+# ... (Reaction and Comment endpoints remain the same) ...
 
 @app.post("/news/{news_id}/reaction", response_class=JSONResponse)
 async def add_reaction(news_id: str, payload: dict):
-    # ... (code omitted for brevity, logic remains the same) ...
     action = payload.get("action")
     if action not in ("like", "dislike"):
         raise HTTPException(status_code=400, detail="Invalid action")
@@ -142,7 +138,6 @@ async def add_reaction(news_id: str, payload: dict):
 
 @app.get("/news/{news_id}/comments", response_class=JSONResponse)
 async def get_comments(news_id: str):
-    # ... (code omitted for brevity, logic remains the same) ...
     try:
         oid = ObjectId(news_id)
     except Exception:
@@ -166,7 +161,6 @@ async def get_comments(news_id: str):
 
 @app.post("/news/{news_id}/comments", response_class=JSONResponse)
 async def add_comment(news_id: str, payload: dict):
-    # ... (code omitted for brevity, logic remains the same) ...
     text = (payload.get("text") or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty comment")
@@ -199,4 +193,4 @@ async def shutdown():
     if client:
         client.close()
     log.info("App shutdown.")
-# End of file: app.py
+    
