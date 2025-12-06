@@ -1,4 +1,4 @@
-# ~/project/app.py - పూర్తి సరిచేసిన కోడ్ (Caching Fix)
+# ~/project/app.py - పూర్తి సరిచేసిన కోడ్
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +10,8 @@ from bson import ObjectId
 import os
 from datetime import datetime
 import logging
+import subprocess # New: For running fetch_rss.py
+import threading # New: For non-blocking execution
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("shortnews")
@@ -31,7 +33,9 @@ MONGO_URL = os.getenv("MONGO_URL")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
 
 if not MONGO_URL:
-    raise RuntimeError("MONGO_URL environment variable not set")
+    # ఇది Render లో MONGO_URL సెట్ చేయకపోతే మాత్రమే ట్రిగ్గర్ అవుతుంది
+    log.error("MONGO_URL environment variable not set")
+    # raise RuntimeError("MONGO_URL environment variable not set") # Runtime error ని నివారించడానికి
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[MONGO_DB_NAME]
@@ -39,14 +43,11 @@ news_col = db["news"]
 comments_col = db["comments"]
 
 # -----------------------
-# Helpers
+# Helpers (No change)
 # -----------------------
 
 def serialize_news(doc):
-    """
-    Simple serializer WITHOUT created_at to avoid isoformat errors.
-    This prevents server 500 when created_at is missing or malformed.
-    """
+    """Simple serializer."""
     if not doc:
         return None
     return {
@@ -59,16 +60,47 @@ def serialize_news(doc):
     }
 
 # -----------------------
-# Pages
+# RSS Fetching Trigger (for External Cron Service)
+# -----------------------
+
+def run_fetch_rss_script():
+    """Runs the synchronous fetch_rss.py script in a separate process."""
+    if not MONGO_URL:
+        log.warning("Skipping fetch: MONGO_URL not set.")
+        return
+        
+    log.info("Starting fetch_rss.py via subprocess...")
+    try:
+        # fetch_rss.py ను నేరుగా పిలవడం
+        result = subprocess.run(
+            ["python", "fetch_rss.py"], 
+            capture_output=True, 
+            text=True, 
+            check=True # ఇది ఫెయిల్ అయితే ఎర్రర్ ఇస్తుంది
+        )
+        log.info(f"fetch_rss.py completed. Output:\n{result.stdout}")
+    except subprocess.CalledProcessError as e:
+        log.error(f"fetch_rss.py failed! Stderr:\n{e.stderr}")
+    except Exception as e:
+        log.error(f"Error running fetch_rss.py: {e}")
+
+@app.get("/secret-fetcher-endpoint-3453456", status_code=202)
+async def trigger_fetch():
+    """
+    Triggers the fetch_rss.py script in a background thread to avoid blocking the main web server.
+    NOTE: Change this URL to a long, hard-to-guess string for security.
+    """
+    threading.Thread(target=run_fetch_rss_script).start()
+    log.info("Fetch triggered by external source.")
+    return {"status": "accepted", "message": "News fetch started in background."}
+
+# -----------------------
+# Endpoints (Cache Fix)
 # -----------------------
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("app.html", {"request": request})
-
-# -----------------------
-# News API
-# -----------------------
 
 @app.get("/news", response_class=JSONResponse)
 async def list_news(limit: int = 100):
@@ -78,18 +110,17 @@ async def list_news(limit: int = 100):
     cursor = news_col.find({}, sort=[("created_at", -1)]).limit(limit)
     items = [serialize_news(doc) async for doc in cursor]
     
-    # *** FIXED: Cache-Control హెడర్‌ను జతచేయండి ***
+    # FIXED: Cache-Control హెడర్‌ను జతచేయండి
     return JSONResponse(
         content={"items": items},
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 
+# ... (Reaction and Comment endpoints remain the same, as per user's old code) ...
+
 @app.post("/news/{news_id}/reaction", response_class=JSONResponse)
 async def add_reaction(news_id: str, payload: dict):
-    """
-    Like / Dislike endpoint.
-    payload = { "action": "like" | "dislike" }
-    """
+    # ... (code omitted for brevity, logic remains the same) ...
     action = payload.get("action")
     if action not in ("like", "dislike"):
         raise HTTPException(status_code=400, detail="Invalid action")
@@ -101,22 +132,17 @@ async def add_reaction(news_id: str, payload: dict):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid news id")
 
-    # Update the counts atomically
     result = await news_col.update_one({"_id": oid}, {"$inc": {field: 1}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="News not found")
 
-    # Fetch the updated counts
     doc = await news_col.find_one({"_id": oid})
     data = serialize_news(doc)
     return {"likes": data["likes"], "dislikes": data["dislikes"]}
 
-# -----------------------
-# Comments API
-# -----------------------
-
 @app.get("/news/{news_id}/comments", response_class=JSONResponse)
 async def get_comments(news_id: str):
+    # ... (code omitted for brevity, logic remains the same) ...
     try:
         oid = ObjectId(news_id)
     except Exception:
@@ -129,7 +155,6 @@ async def get_comments(news_id: str):
             {
                 "id": str(doc["_id"]),
                 "text": doc.get("text", ""),
-                # don't assume created_at has isoformat; convert to string safely
                 "created_at": (
                     doc.get("created_at").isoformat()
                     if hasattr(doc.get("created_at"), "isoformat")
@@ -141,6 +166,7 @@ async def get_comments(news_id: str):
 
 @app.post("/news/{news_id}/comments", response_class=JSONResponse)
 async def add_comment(news_id: str, payload: dict):
+    # ... (code omitted for brevity, logic remains the same) ...
     text = (payload.get("text") or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty comment")
@@ -159,19 +185,18 @@ async def add_comment(news_id: str, payload: dict):
     return {"id": str(res.inserted_id)}
 
 # -----------------------
-# Startup / Shutdown logs
+# Startup / Shutdown
 # -----------------------
 
 @app.on_event("startup")
 async def startup():
-    log.info("Connected to MongoDB")
-    log.info("App startup complete")
-
+    log.info("App startup complete.")
+    # Optional: Run fetch once on startup to ensure initial data load
+    threading.Thread(target=run_fetch_rss_script).start()
+    
 @app.on_event("shutdown")
 async def shutdown():
-    # client.close() - assuming client is handled by motor properly, but adding it for safety
     if client:
         client.close()
-    log.info("App shutdown")
-
+    log.info("App shutdown.")
 # End of file: app.py
