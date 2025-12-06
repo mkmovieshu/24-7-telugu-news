@@ -26,18 +26,20 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="ui")
 
 # -----------------------
-# MongoDB
+# MongoDB (Async Motor)
 # -----------------------
 
+# app.py uses motor (async) for web requests
 MONGO_URL = os.getenv("MONGO_URL")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
 
 if not MONGO_URL:
     log.error("MONGO_URL environment variable not set")
+    # WARNING: Not raising error here to allow local testing without env var
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[MONGO_DB_NAME]
-news_col = db["news"]
+news_col = db["news"] # Async collection used by web endpoints
 comments_col = db["comments"]
 
 # -----------------------
@@ -62,19 +64,18 @@ def serialize_news(doc):
 # -----------------------
 
 def run_fetch_rss_script():
-    """Runs the synchronous fetch_rss.py script in a separate process."""
+    """Runs the synchronous fetch_rss.py script in a separate process/thread."""
     if not MONGO_URL:
         log.warning("Skipping fetch: MONGO_URL not set.")
         return
         
     log.info("Starting fetch_rss.py via subprocess...")
     try:
-        # fetch_rss.py ను నేరుగా పిలవడం
         result = subprocess.run(
             ["python", "fetch_rss.py"], 
             capture_output=True, 
             text=True, 
-            check=True # ఇది ఫెయిల్ అయితే ఎర్రర్ ఇస్తుంది
+            check=True
         )
         log.info(f"fetch_rss.py completed. Output:\n{result.stdout}")
     except subprocess.CalledProcessError as e:
@@ -86,6 +87,7 @@ def run_fetch_rss_script():
 async def trigger_fetch():
     """
     Triggers the fetch_rss.py script in a background thread to avoid blocking the main web server.
+    NOTE: Use a long, hard-to-guess URL for security.
     """
     threading.Thread(target=run_fetch_rss_script).start()
     log.info("Fetch triggered by external source.")
@@ -112,8 +114,6 @@ async def list_news(limit: int = 100):
         content={"items": items},
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
-
-# ... (Reaction and Comment endpoints remain the same) ...
 
 @app.post("/news/{news_id}/reaction", response_class=JSONResponse)
 async def add_reaction(news_id: str, payload: dict):
@@ -191,6 +191,5 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     if client:
-        client.close()
+        client.close() # Close motor client
     log.info("App shutdown.")
-    
