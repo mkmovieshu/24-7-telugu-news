@@ -1,4 +1,4 @@
-// static/js/main.js - పూర్తి సరిచేసిన కోడ్
+// static/js/main.js - పూర్తి సరిచేసిన కోడ్ (రిక‌ర్ష‌న్ ఫిక్స్)
 // api.js నుండి ఫంక్షన్లను ఆలియాస్‌లతో ఇంపోర్ట్ చేయడం ద్వారా రికర్షన్ నివారిస్తుంది.
 import { 
   fetchNews as apiFetchNews, 
@@ -15,7 +15,7 @@ import {
   let newsList = [];
   let idx = 0;
 
-  // ======= DOM refs (No change) =======
+  // ======= DOM refs =======
   const titleEl = document.getElementById('news-title');
   const summaryEl = document.getElementById('news-summary');
   const linkEl = document.getElementById('news-link');
@@ -46,7 +46,7 @@ import {
     if(type==='error') console.error(msg); else console.log(msg);
   }
 
-  // ======= UI renderers (No change) =======
+  // ======= UI renderers =======
   function renderCard(){
     if(!newsList || newsList.length===0){
       titleEl.textContent = "టైటిల్ లేదు";
@@ -83,11 +83,10 @@ import {
   // ======= backend actions (MODIFIED to use api.js imports) =======
   async function loadNews(){
     try{
-      // MODIFIED: Use apiFetchNews (imported function)
+      // *** apiFetchNews ను వాడుతున్నాం ***
       const data = await apiFetchNews(NEWS_LIMIT); 
       
       const items = data.items || [];
-      // normalize: ensure id, title, summary, link, likes, dislikes (from original code)
       newsList = items.map(it=>({
         id: it.id || it._id || '',
         title: it.title || '',
@@ -110,7 +109,7 @@ import {
     if(!newsList[idx] || !newsList[idx].id) { log('error','no news id'); return; }
     const id = newsList[idx].id;
     try{
-      // MODIFIED: Use apiPostReaction (imported function)
+      // *** apiPostReaction ను వాడుతున్నాం ***
       const res = await apiPostReaction(id, action);
       
       // update local
@@ -130,7 +129,7 @@ import {
     if(!newsList[idx] || !newsList[idx].id) return;
     const id = newsList[idx].id;
     try{
-      // MODIFIED: Use apiFetchComments (imported function)
+      // *** apiFetchComments ను వాడుతున్నాం ***
       const data = await apiFetchComments(id);
       
       const items = (data.items || []);
@@ -156,7 +155,7 @@ import {
     if(!text || !text.trim()){ alert('ఖాళీ కామెంట్ పంప్వద్దు'); return; }
     const id = newsList[idx].id;
     try{
-      // MODIFIED: Use apiPostComment (imported function)
+      // *** apiPostComment ను వాడుతున్నాం ***
       const res = await apiPostComment(id, text);
       
       // add to local render immediately by reloading comments
