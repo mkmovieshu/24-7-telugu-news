@@ -1,15 +1,16 @@
-# db.py - MongoDB కనెక్షన్ పరిష్కరించబడింది
+# db.py
 import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ✅ FIX 1: 'MONGO_URL' ను ఉపయోగించండి (app.py మరియు Render తో స్థిరత్వం కోసం)
+# MONGO_URL ను app.py మరియు Render తో స్థిరత్వం కోసం ఉపయోగించండి
 MONGO_URI = os.getenv("MONGO_URL") 
+# DB పేరు MONGO_DB_NAME (Render లో సెట్ చేయకపోతే 'shortnews' డిఫాల్ట్)
 DB_NAME = os.getenv("MONGO_DB_NAME") or "shortnews" 
 
-# ✅ FIX 2: MONGO_URL సెట్ చేయకపోతే కనెక్షన్ ఆగిపోవాలి, లోకల్ అడ్రస్ వాడకూడదు
+# MONGO_URL సెట్ చేయకపోతే, లోపం చూపించి ఆగిపోవాలి.
 if not MONGO_URI:
     raise ValueError("MONGO_URL environment variable is not set. Cannot connect to MongoDB.")
 
@@ -24,4 +25,4 @@ try:
     news_collection.create_index("created_at", expireAfterSeconds=86400)
 except Exception:
     pass
-
+    
