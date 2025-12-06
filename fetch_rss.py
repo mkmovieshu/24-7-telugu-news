@@ -1,32 +1,16 @@
-# fetch_rss.py - పూర్తి సరిచేసిన కోడ్ (Self-contained DB connection)
+# fetch_rss.py - Final Corrected Code using user's db.py
 import os
 import feedparser
 from datetime import datetime
 from urllib.parse import urlparse
 
-# New: Use synchronous pymongo for the standalone script
-from pymongo import MongoClient
-# User's existing import
+# New: Use collections and client from the user's provided db.py (synchronous)
+from db import news_collection 
+from db import client as db_client # The MongoClient object
 from summarize import summarize_item 
 
 # -----------------------------------------------------------
-# MongoDB Connection Setup for Standalone Script
-# -----------------------------------------------------------
-MONGO_URL = os.getenv("MONGO_URL")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
-
-if not MONGO_URL:
-    print("Error: MONGO_URL environment variable not set.")
-    exit(1)
-
-client = MongoClient(MONGO_URL)
-db = client[MONGO_DB_NAME]
-news_collection = db["news"]
-# -----------------------------------------------------------
-
-
-# -----------------------------------------------------------
-# FIXED: Read feeds from RSS_FEEDS environment variable first
+# RSS Feeds Configuration
 # -----------------------------------------------------------
 FEEDS = []
 rss_feeds_env = os.getenv("RSS_FEEDS")
@@ -102,13 +86,13 @@ def fetch_all():
         try:
             d = feedparser.parse(feed)
             for entry in d.get("entries", []):
-                e = normalize_item(entry)
-                upsert_entry(e)
+                upsert_entry(normalize_item(entry))
             print(f"Successfully fetched and processed feed: {feed}")
         except Exception as e:
             print(f"fetch error for {feed}: {e}")
-    # Close connection
-    client.close()
+            
+    # Close the synchronous MongoClient connection used by this script
+    db_client.close() 
 
 if __name__ == "__main__":
     fetch_all()
