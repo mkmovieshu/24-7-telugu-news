@@ -1,4 +1,4 @@
-# ~/project/app.py - పూర్తి సరిచేసిన కోడ్
+# ~/project/app.py - పూర్తి సరిచేసిన కోడ్ (Caching Fix)
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -54,75 +54,69 @@ def serialize_news(doc):
         "title": doc.get("title") or "",
         "summary": doc.get("summary") or "",
         "link": doc.get("link") or doc.get("source") or "",
-        "likes": doc.get("likes", 0),
-        "dislikes": doc.get("dislikes", 0),
-        # created_at is only used for TTL index, don't expose it to API
+        "likes": int(doc.get("likes", 0) or 0),
+        "dislikes": int(doc.get("dislikes", 0) or 0),
     }
 
-
 # -----------------------
-# Endpoints
+# Pages
 # -----------------------
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    # render the single-page application entry point
     return templates.TemplateResponse("app.html", {"request": request})
 
+# -----------------------
+# News API
+# -----------------------
 
 @app.get("/news", response_class=JSONResponse)
 async def list_news(limit: int = 100):
     """
     Return list of news items. ADDED CACHE CONTROL.
     """
-    # use a projection to potentially improve performance/reduce network load
-    projection = {"title": 1, "summary": 1, "link": 1, "likes": 1, "dislikes": 1, "source": 1}
-    cursor = news_col.find({}, sort=[("created_at", -1)], projection=projection).limit(limit)
+    cursor = news_col.find({}, sort=[("created_at", -1)]).limit(limit)
     items = [serialize_news(doc) async for doc in cursor]
-
-    # **FIXED:** Add Cache-Control header to prevent client-side caching of news list
+    
+    # *** FIXED: Cache-Control హెడర్‌ను జతచేయండి ***
     return JSONResponse(
         content={"items": items},
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 
-
 @app.post("/news/{news_id}/reaction", response_class=JSONResponse)
-async def react_to_news(news_id: str, payload: dict):
-    action = (payload.get("action") or "").lower()
-    if action not in ["like", "dislike"]:
-        raise HTTPException(status_code=400, detail="Invalid action: must be 'like' or 'dislike'")
+async def add_reaction(news_id: str, payload: dict):
+    """
+    Like / Dislike endpoint.
+    payload = { "action": "like" | "dislike" }
+    """
+    action = payload.get("action")
+    if action not in ("like", "dislike"):
+        raise HTTPException(status_code=400, detail="Invalid action")
+
+    field = "likes" if action == "like" else "dislikes"
 
     try:
         oid = ObjectId(news_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid news id")
 
-    # Update the likes/dislikes count atomically
-    update_field = "likes" if action == "like" else "dislikes"
-    
-    result = await news_col.update_one(
-        {"_id": oid},
-        {"$inc": {update_field: 1}},
-    )
-
+    # Update the counts atomically
+    result = await news_col.update_one({"_id": oid}, {"$inc": {field: 1}})
     if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="News item not found")
+        raise HTTPException(status_code=404, detail="News not found")
 
     # Fetch the updated counts
-    updated_doc = await news_col.find_one(
-        {"_id": oid},
-        projection={"likes": 1, "dislikes": 1}
-    )
-    
-    return {
-        "likes": updated_doc.get("likes", 0),
-        "dislikes": updated_doc.get("dislikes", 0)
-    }
+    doc = await news_col.find_one({"_id": oid})
+    data = serialize_news(doc)
+    return {"likes": data["likes"], "dislikes": data["dislikes"]}
 
+# -----------------------
+# Comments API
+# -----------------------
 
 @app.get("/news/{news_id}/comments", response_class=JSONResponse)
-async def list_comments(news_id: str):
+async def get_comments(news_id: str):
     try:
         oid = ObjectId(news_id)
     except Exception:
@@ -164,20 +158,20 @@ async def add_comment(news_id: str, payload: dict):
     res = await comments_col.insert_one(doc)
     return {"id": str(res.inserted_id)}
 
-
 # -----------------------
 # Startup / Shutdown logs
 # -----------------------
 
 @app.on_event("startup")
-async def startup_db_client():
-    log.info(f"Connecting to MongoDB at {MONGO_URL.split('@')[-1]}")
-    # We rely on TTL index for deletion, no extra cron job needed here.
-    pass
+async def startup():
+    log.info("Connected to MongoDB")
+    log.info("App startup complete")
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
-    log.info("Closed MongoDB connection")
+async def shutdown():
+    # client.close() - assuming client is handled by motor properly, but adding it for safety
+    if client:
+        client.close()
+    log.info("App shutdown")
 
 # End of file: app.py
