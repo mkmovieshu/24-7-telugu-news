@@ -1,22 +1,6 @@
-# summarize.py - తుది కోడ్
+# summarize.py - Indentation Fixed + Telugu Prompt
 import os
 from groq_client import groq_summarize 
-# summarize.py (Ensure Fallback Logic is Consistent)
-# ... (AI summarization block) ...
-
-    except Exception as e:
-        print(f"Error during Groq summarization: {e}. Falling back to simple trim.")
-        pass 
-
-    # 4. Fallback simple trim (applied when AI fails or keys are missing)
-    # NOTE: This fallback text will NOT be translated and might be in English.
-    s = text.strip()
-    
-    if len(s) <= 500: 
-        return s
-    
-    # Simple trim for long non-AI summaries
-    return s[:500].rsplit(" ",1)[0] + "..."
 
 def summarize_item(doc):
     text = doc.get("raw_summary") or doc.get("title") or ""
@@ -25,7 +9,7 @@ def summarize_item(doc):
 
     # Groq APIకి పంపే స్పష్టమైన తెలుగు ఆదేశం
     instruction = (
-        "Summarize the following text into a short news snippet in **Telugu language** only. "
+        "Summarize the following text into a short news snippet. "
         "The summary should be concise, be between 300 to 500 characters, "
         "and must be based *only* on the provided text. Do not include any title, greeting, or introductory phrase."
     )
@@ -37,8 +21,8 @@ def summarize_item(doc):
         endpoint = os.getenv("GROQ_ENDPOINT")
         
         if api_key and endpoint:
-            # full_prompt (తెలుగు ఆదేశంతో సహా) groq_summarize కు పంపబడుతుంది
-            out = groq_summarize(full_prompt, max_tokens=500) 
+            # full_prompt ను groq_summarize కు పంపుతుంది
+            out = groq_summarize(full_prompt, max_tokens=500)
             
             if out:
                 s = out.strip()
@@ -49,7 +33,8 @@ def summarize_item(doc):
         else:
             print("Warning: GROQ_API_KEY or GROQ_ENDPOINT not set. Falling back to simple trim.")
             
-    except Exception as e:
+    except Exception as e: 
+        # ✅ ఇక్కడ ఇండెంటేషన్ సరిగా ఉండాలి (def కింది అన్ని లైన్లు 4 స్పేస్‌లతో మొదలవ్వాలి)
         print(f"Error during Groq summarization: {e}. Falling back to simple trim.")
         pass 
 
