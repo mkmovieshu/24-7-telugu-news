@@ -1,4 +1,5 @@
-// static/js/main.js - సరిచేసిన కోడ్ (Recursion ఫిక్స్ చేయబడింది)
+// static/js/main.js - పూర్తి సరిచేసిన కోడ్
+// api.js నుండి ఫంక్షన్లను ఆలియాస్‌లతో ఇంపోర్ట్ చేయడం ద్వారా రికర్షన్ నివారిస్తుంది.
 import { 
   fetchNews as apiFetchNews, 
   postReaction as apiPostReaction, 
@@ -86,8 +87,9 @@ import {
       const data = await apiFetchNews(NEWS_LIMIT); 
       
       const items = data.items || [];
+      // normalize: ensure id, title, summary, link, likes, dislikes (from original code)
       newsList = items.map(it=>({
-        id: it.id || '', 
+        id: it.id || it._id || '',
         title: it.title || '',
         summary: it.summary || '',
         link: it.link || it.source || '',
@@ -118,7 +120,7 @@ import {
       dislikesCountEl.textContent = newsList[idx].dislikes;
     }catch(err){
       log('error','postReaction error: ' + (err.message||err));
-      alert('Reaction తప్పిపోయింది: '+ (err.message||err));
+      alert('Reaction తప్పిపోయింది: '+ (err.message||err)); 
     }
   }
 
