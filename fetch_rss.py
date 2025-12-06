@@ -1,12 +1,29 @@
-# fetch_rss.py - పూర్తి సరిచేసిన కోడ్ (RSS_FEEDS ఎన్విరాన్‌మెంట్ వేరియబుల్‌ను చదువుతుంది)
+# fetch_rss.py - పూర్తి సరిచేసిన కోడ్ (Self-contained DB connection)
 import os
 import feedparser
 from datetime import datetime
 from urllib.parse import urlparse
-# Make sure db.py and summarize.py are available in the project root
-from db import news_collection
-from summarize import summarize_item
-from bson.objectid import ObjectId
+
+# New: Use synchronous pymongo for the standalone script
+from pymongo import MongoClient
+# User's existing import
+from summarize import summarize_item 
+
+# -----------------------------------------------------------
+# MongoDB Connection Setup for Standalone Script
+# -----------------------------------------------------------
+MONGO_URL = os.getenv("MONGO_URL")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
+
+if not MONGO_URL:
+    print("Error: MONGO_URL environment variable not set.")
+    exit(1)
+
+client = MongoClient(MONGO_URL)
+db = client[MONGO_DB_NAME]
+news_collection = db["news"]
+# -----------------------------------------------------------
+
 
 # -----------------------------------------------------------
 # FIXED: Read feeds from RSS_FEEDS environment variable first
@@ -15,19 +32,11 @@ FEEDS = []
 rss_feeds_env = os.getenv("RSS_FEEDS")
 
 if rss_feeds_env:
-    # Split the environment variable string into a list of URLs (assuming comma separation)
+    # కామా ద్వారా వేరు చేయబడిన URL ల జాబితా
     FEEDS = [f.strip() for f in rss_feeds_env.split(',') if f.strip()]
 
 if not FEEDS:
-    # Fallback: use hardcoded list if the environment variable is not set or is empty
-    FEEDS = [
-        # మీరు రెండర్ కాన్ఫిగరేషన్‌లో సెట్ చేసినట్టుగా ఇక్కడ డిఫాల్ట్‌లను ఉంచవచ్చు
-        "https://www.ntnews.com/rss",   # ఉదాహరణ
-        # Add feed URLs here if you are not using environment variables
-    ]
-
-if not FEEDS:
-    print("Warning: No RSS feeds configured in FEEDS list or RSS_FEEDS environment variable. Exiting.")
+    print("Warning: No RSS feeds configured in RSS_FEEDS environment variable. Exiting.")
     import sys
     sys.exit(0)
 # -----------------------------------------------------------
@@ -54,6 +63,7 @@ def normalize_item(entry):
                 image = l.get("href")
                 break
     return {"title": title, "link": link, "raw_summary": summary, "published": published, "image": image}
+
 
 def upsert_entry(e):
     if not e.get("link"):
@@ -96,7 +106,9 @@ def fetch_all():
                 upsert_entry(e)
             print(f"Successfully fetched and processed feed: {feed}")
         except Exception as e:
-            print("fetch error for", feed, e)
+            print(f"fetch error for {feed}: {e}")
+    # Close connection
+    client.close()
 
 if __name__ == "__main__":
     fetch_all()
