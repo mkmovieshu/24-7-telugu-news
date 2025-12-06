@@ -1,4 +1,4 @@
-# groq_client.py - తెలుగులో మాత్రమే స్పందించడానికి
+# groq_client.py
 import os
 import httpx
 
