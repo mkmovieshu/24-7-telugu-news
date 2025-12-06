@@ -1,6 +1,22 @@
 # summarize.py - తుది కోడ్
 import os
 from groq_client import groq_summarize 
+# summarize.py (Ensure Fallback Logic is Consistent)
+# ... (AI summarization block) ...
+
+    except Exception as e:
+        print(f"Error during Groq summarization: {e}. Falling back to simple trim.")
+        pass 
+
+    # 4. Fallback simple trim (applied when AI fails or keys are missing)
+    # NOTE: This fallback text will NOT be translated and might be in English.
+    s = text.strip()
+    
+    if len(s) <= 500: 
+        return s
+    
+    # Simple trim for long non-AI summaries
+    return s[:500].rsplit(" ",1)[0] + "..."
 
 def summarize_item(doc):
     text = doc.get("raw_summary") or doc.get("title") or ""
