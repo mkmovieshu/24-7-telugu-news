@@ -1,4 +1,4 @@
-# groq_client.py - FINAL CORRECTED CODE (System Prompt Added)
+# groq_client.py - Indentation Fixed + System Prompt
 import os
 import httpx
 
@@ -11,16 +11,17 @@ def groq_summarize(text, max_tokens=500):
     try:
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         
+        # ✅ FIX: 'payload' డిక్షనరీలోని అంశాలన్నీ సరిగ్గా ఇండెంట్ చేయబడ్డాయి.
         payload = {
-            "model": "llama3-8b-8192", # ✅ తెలుగుకు మెరుగైన మోడల్ (లేదా మీ ఇష్టమైన మోడల్)
+            "model": "llama3-8b-8192", # తెలుగుకు మెరుగైన మోడల్
             
             "messages": [
-                # ✅ System Prompt: తెలుగులో మాత్రమే స్పందించమని గట్టి ఆదేశం
+                # System Prompt: తెలుగులో మాత్రమే స్పందించమని గట్టి ఆదేశం
                 {
                     "role": "system",
                     "content": "You are a professional Telugu news summarizer. You MUST translate and summarize the text **EXCLUSIVELY in Telugu (తెలుగు)**. Do not output any English words, letters, or numbers (transliterate numbers into Telugu words if needed). If any part cannot be translated, you must still provide the most appropriate Telugu equivalent. Maintain a concise 300-500 character length."
                 },
-                # User Prompt (summarize.py నుండి వస్తుంది)
+                # User Prompt
                 {
                     "role": "user",
                     "content": text
@@ -45,4 +46,3 @@ def groq_summarize(text, max_tokens=500):
         print("groq general error", e)
         
     return None
-            
