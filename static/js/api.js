@@ -1,4 +1,4 @@
-// static/js/api.js
+// static/js/api.js - పూర్తి సరిచేసిన కోడ్
 // simple ES module with named exports used by other modules
 
 export async function fetchNews(limit = 50) {
