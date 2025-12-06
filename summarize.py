@@ -1,4 +1,4 @@
-# summarize.py - Indentation Checked + Prompt Refined
+# summarize.py
 import os
 from groq_client import groq_summarize 
 
@@ -21,10 +21,12 @@ def summarize_item(doc):
         endpoint = os.getenv("GROQ_ENDPOINT")
         
         if api_key and endpoint:
+            # max_tokens ను 500 కి సెట్ చేయండి (సుమారు 500 అక్షరాల కోసం)
             out = groq_summarize(full_prompt, max_tokens=500)
             
             if out:
                 s = out.strip()
+                # తుది అక్షరాల పరిమితి (500) కోసం తనిఖీ
                 if len(s) > 500:
                     return s[:500].rsplit(" ", 1)[0] + "..."
                 return s
@@ -38,6 +40,7 @@ def summarize_item(doc):
     # fallback simple trim (if AI fails or credentials missing)
     s = text.strip()
     
+    # ఫాల్‌బ్యాక్ పరిమితిని 500 కి సెట్ చేయండి
     if len(s) <= 500: 
         return s
     
