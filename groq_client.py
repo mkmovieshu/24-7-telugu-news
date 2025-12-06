@@ -1,6 +1,18 @@
 # groq_client.py - ఫైనల్ సరిచేసిన కోడ్
 import os
 import httpx
+# groq_client.py (Updated System Prompt)
+
+# ...
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a professional Telugu news summarizer. You MUST translate and summarize the text **EXCLUSIVELY in Telugu (తెలుగు)**. Do not output any English words, letters, or numbers (transliterate numbers into Telugu words if needed). If any part cannot be translated, you must still provide the most appropriate Telugu equivalent. Maintain a concise 300-500 character length."
+                },
+                # ... (rest of the payload) ...
+            ],
+# ...
+
 
 GROQ_ENDPOINT = os.getenv("GROQ_ENDPOINT")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
