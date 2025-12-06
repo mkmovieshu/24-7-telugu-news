@@ -1,22 +1,47 @@
-# summarize.py
+# summarize.py - తుది కోడ్
 import os
-from groq_client import groq_summarize
+from groq_client import groq_summarize 
 
 def summarize_item(doc):
-    # doc may contain 'raw_summary' or 'title' + 'published' etc.
     text = doc.get("raw_summary") or doc.get("title") or ""
+    if not text:
+        return ""
+
+    # Groq APIకి పంపే స్పష్టమైన తెలుగు ఆదేశం
+    instruction = (
+        "Summarize the following text into a short news snippet in **Telugu language** only. "
+        "The summary should be concise, be between 300 to 500 characters, "
+        "and must be based *only* on the provided text. Do not include any title, greeting, or introductory phrase."
+    )
+    full_prompt = f"{instruction}\n\nTEXT TO SUMMARIZE:\n{text}"
+
     # try AI summarizer if credentials set
     try:
         api_key = os.getenv("GROQ_API_KEY")
         endpoint = os.getenv("GROQ_ENDPOINT")
+        
         if api_key and endpoint:
-            out = groq_summarize(text, max_tokens=300)
+            # full_prompt (తెలుగు ఆదేశంతో సహా) groq_summarize కు పంపబడుతుంది
+            out = groq_summarize(full_prompt, max_tokens=500) 
+            
             if out:
-                return out
-    except Exception:
-        pass
-    # fallback simple trim
+                s = out.strip()
+                # తుది అక్షరాల పరిమితి (500) కోసం తనిఖీ
+                if len(s) > 500:
+                    return s[:500].rsplit(" ", 1)[0] + "..."
+                return s
+        else:
+            print("Warning: GROQ_API_KEY or GROQ_ENDPOINT not set. Falling back to simple trim.")
+            
+    except Exception as e:
+        print(f"Error during Groq summarization: {e}. Falling back to simple trim.")
+        pass 
+
+    # fallback simple trim (if AI fails or credentials missing)
     s = text.strip()
-    if len(s) <= 400:
+    
+    if len(s) <= 500: 
         return s
-    return s[:400].rsplit(" ",1)[0] + "..."
+    
+    return s[:500].rsplit(" ",1)[0] + "..."
+    
