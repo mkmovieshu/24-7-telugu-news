@@ -18,3 +18,4 @@ try:
     news_collection.create_index("created_at", expireAfterSeconds=86400)
 except Exception:
     pass
+    
