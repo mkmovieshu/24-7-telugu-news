@@ -1,4 +1,4 @@
-# summarize.py - Indentation Fixed + Telugu Prompt
+# summarize.py - Indentation Checked + Prompt Refined
 import os
 from groq_client import groq_summarize 
 
@@ -7,7 +7,7 @@ def summarize_item(doc):
     if not text:
         return ""
 
-    # Groq APIకి పంపే స్పష్టమైన తెలుగు ఆదేశం
+    # User Prompt: సారాంశం యొక్క లక్ష్యాన్ని సెట్ చేస్తుంది.
     instruction = (
         "Summarize the following text into a short news snippet. "
         "The summary should be concise, be between 300 to 500 characters, "
@@ -21,20 +21,17 @@ def summarize_item(doc):
         endpoint = os.getenv("GROQ_ENDPOINT")
         
         if api_key and endpoint:
-            # full_prompt ను groq_summarize కు పంపుతుంది
             out = groq_summarize(full_prompt, max_tokens=500)
             
             if out:
                 s = out.strip()
-                # తుది అక్షరాల పరిమితి (500) కోసం తనిఖీ
                 if len(s) > 500:
                     return s[:500].rsplit(" ", 1)[0] + "..."
                 return s
         else:
             print("Warning: GROQ_API_KEY or GROQ_ENDPOINT not set. Falling back to simple trim.")
             
-    except Exception as e: 
-        # ✅ ఇక్కడ ఇండెంటేషన్ సరిగా ఉండాలి (def కింది అన్ని లైన్లు 4 స్పేస్‌లతో మొదలవ్వాలి)
+    except Exception as e:
         print(f"Error during Groq summarization: {e}. Falling back to simple trim.")
         pass 
 
