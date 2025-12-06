@@ -1,4 +1,30 @@
 # summarize.py - తుది కోడ్
+# fetch_rss.py - ఫీడ్స్ లోడ్ చేయడానికి సరిదిద్దబడిన కోడ్
+import os
+import feedparser
+from datetime import datetime
+from urllib.parse import urlparse
+from db import news_collection
+from summarize import summarize_item
+from bson.objectid import ObjectId
+
+# ✅ FIX: ENVIRONMENT VARIABLE నుండి ఫీడ్‌లను లోడ్ చేయండి
+RSS_FEEDS_ENV = os.getenv("RSS_FEEDS")
+
+# RSS_FEEDS_ENV లో సెట్ చేస్తే, కామాలతో వేరు చేసిన వాటిని లిస్ట్ గా మారుస్తుంది.
+if RSS_FEEDS_ENV:
+    FEEDS = [f.strip() for f in RSS_FEEDS_ENV.split(',') if f.strip()]
+else:
+    # Environment variable సెట్ చేయకపోతే, పాత డిఫాల్ట్ ను వాడుతుంది.
+    # ఈ డిఫాల్ట్ ను తొలగించడం ద్వారా, FEEDS ఖాళీగా ఉండదు.
+    FEEDS = [
+        "https://www.hindustantimes.com/feeds/rss/entertainment/telugu-cinema/rssfeed.xml",
+        "https://telugu.oneindia.com/rss/feeds/oneindia-telugu-fb.xml",
+        "https://www.teluguone.com/news/tonefeeds/latestnews/latestnews-25.rss"
+    ]
+
+# ... మిగిలిన కోడ్ అంతా పాతదే...
+
 import os
 from groq_client import groq_summarize 
 
