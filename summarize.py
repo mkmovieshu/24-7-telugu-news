@@ -1,48 +1,27 @@
 # summarize.py
 import os
-from groq_client import groq_summarize 
+from groq_client import groq_summarize
 
 def summarize_item(doc):
+    # doc may contain 'raw_summary' or 'title' + 'published' etc.
     text = doc.get("raw_summary") or doc.get("title") or ""
-    if not text:
-        return ""
-
-    # User Prompt: సారాంశం యొక్క లక్ష్యాన్ని సెట్ చేస్తుంది.
-    instruction = (
-        "Summarize the following text into a short news snippet. "
-        "The summary should be concise, be between 300 to 500 characters, "
-        "and must be based *only* on the provided text. Do not include any title, greeting, or introductory phrase."
-    )
-    full_prompt = f"{instruction}\n\nTEXT TO SUMMARIZE:\n{text}"
-
+    
+    # === ఇక్కడ మార్పు చేయబడింది: AI ప్రాంప్ట్‌కి తెలుగు సూచనను జోడించడం ===
+    prompt_text = "తెలుగు భాషలో మాత్రమే సారాంశం ఇవ్వండి. మాతృక: " + text
+    
     # try AI summarizer if credentials set
     try:
         api_key = os.getenv("GROQ_API_KEY")
         endpoint = os.getenv("GROQ_ENDPOINT")
-        
         if api_key and endpoint:
-            # max_tokens ను 500 కి సెట్ చేయండి (సుమారు 500 అక్షరాల కోసం)
-            out = groq_summarize(full_prompt, max_tokens=500)
-            
+            # *** ఇప్పుడు prompt_text (తెలుగు సూచనతో) ను వాడుతున్నాం ***
+            out = groq_summarize(prompt_text, max_tokens=500) 
             if out:
-                s = out.strip()
-                # తుది అక్షరాల పరిమితి (500) కోసం తనిఖీ
-                if len(s) > 500:
-                    return s[:500].rsplit(" ", 1)[0] + "..."
-                return s
-        else:
-            print("Warning: GROQ_API_KEY or GROQ_ENDPOINT not set. Falling back to simple trim.")
-            
-    except Exception as e:
-        print(f"Error during Groq summarization: {e}. Falling back to simple trim.")
-        pass 
-
-    # fallback simple trim (if AI fails or credentials missing)
+                return out
+    except Exception:
+        pass
+    # fallback simple trim
     s = text.strip()
-    
-    # ఫాల్‌బ్యాక్ పరిమితిని 500 కి సెట్ చేయండి
-    if len(s) <= 500: 
+    if len(s) <= 400:
         return s
-    
-    return s[:500].rsplit(" ",1)[0] + "..."
-    
+    return s[:400].rsplit(" ",1)[0] + "..."
