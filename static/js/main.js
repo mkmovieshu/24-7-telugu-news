@@ -61,7 +61,7 @@ import {
       commentListEl.innerHTML = '';
       commentsCountEl.textContent = "0";
       // తేదీ లేకపోతే ఖాళీగా ఉంచండి
-      dateEl.textContent = ''; 
+      if (dateEl) dateEl.textContent = ''; 
       return;
     }
     const item = newsList[idx];
@@ -72,7 +72,7 @@ import {
     dislikesCountEl.textContent = (item.dislikes||0);
     
     // ✅ తేదీ/సమయాన్ని ఫార్మాట్ చేసి చూపించడం
-    if (item.published) {
+    if (dateEl && item.published) {
         try {
             const dateObj = new Date(item.published);
             // 'te-IN' (తెలుగు - భారతదేశం) లో ఫార్మాట్ చేస్తుంది
@@ -88,7 +88,7 @@ import {
             log('error', 'Date parsing failed for ' + item.id + ': ' + e.message);
             dateEl.textContent = 'తేదీ అందుబాటులో లేదు';
         }
-    } else {
+    } else if (dateEl) {
         dateEl.textContent = 'తేదీ అందుబాటులో లేదు';
     }
 
@@ -97,8 +97,6 @@ import {
     loadCommentsForCurrent();
   }
   
-  // ... (showNext, showPrev ఫంక్షన్లు, loadNews ఫంక్షన్)
-
   function showNext(){
     if(newsList.length===0) return;
     idx = (idx + 1) % newsList.length;
@@ -138,8 +136,6 @@ import {
     }
   }
 
-  // ... (postReaction, loadCommentsForCurrent, postComment ఫంక్షన్లు)
-
   async function postReaction(action){
     if(!newsList[idx] || !newsList[idx].id) { log('error','no news id'); return; }
     const id = newsList[idx].id;
@@ -176,7 +172,8 @@ import {
       for(const c of items){
         const el = document.createElement('div');
         el.className = 'comment';
-        el.textContent = c.text + '  ·  ' + (c.created_at ? new Date(c.created_at).toLocaleString('te-IN') : ''); // తెలుగు ఫార్మాట్‌లో తేదీని చూపిస్తుంది
+        // కామెంట్ తేదీని తెలుగు ఫార్మాట్‌లో చూపిస్తుంది
+        el.textContent = c.text + '  ·  ' + (c.created_at ? new Date(c.created_at).toLocaleString('te-IN') : ''); 
         commentListEl.appendChild(el);
       }
     }catch(err){
