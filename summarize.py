@@ -1,4 +1,4 @@
-# summarize.py
+# summarize.py (సరిచేసిన కోడ్)
 import os
 from groq_client import groq_summarize
 
@@ -15,12 +15,11 @@ def summarize_item(doc):
         api_key = os.getenv("GROQ_API_KEY")
         endpoint = os.getenv("GROQ_ENDPOINT")
         if api_key and endpoint:
-            # సరిచేసిన prompt_text ను వాడుతున్నాం
+            # *** ఇక్కడ 'text' కు బదులుగా 'prompt_text' ని వాడాలి ***
             out = groq_summarize(prompt_text, max_tokens=300) 
             if out:
                 return out
     except Exception:
-        # లోపం వస్తే, లాగ్ చేసి, ఫాల్‌బ్యాక్‌కి వెళ్తుంది
         pass
         
     # fallback simple trim
