@@ -12,7 +12,7 @@ def groq_summarize(text, max_tokens=500):
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         
         payload = {
-            "model": "llama3-8b-8192", # తెలుగుకు మెరుగైన మోడల్
+            "model": "mixtral-8x7b-32768", # తెలుగుకు మెరుగైన మోడల్
             
             "messages": [
                 # ✅ System Prompt: తెలుగులో మాత్రమే మరియు 300-500 అక్షరాల పరిమితి
