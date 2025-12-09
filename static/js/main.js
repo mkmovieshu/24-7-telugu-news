@@ -210,3 +210,13 @@ import {
   });
 
 })();
+// ... (last lines of main.js inside the function)
+  // ✅ గ్లోబల్ యాక్సెస్ కోసం ఫంక్షన్‌లను window ఆబ్జెక్ట్‌కు అటాచ్ చేయండి (swipe.js దీనిని ఉపయోగిస్తుంది)
+  window.showNext = showNext;
+  window.showPrev = showPrev;
+  
+  // on load
+  document.addEventListener('DOMContentLoaded', ()=>{
+    loadNews();
+  });
+// ...
