@@ -1,4 +1,4 @@
-// static/js/main.js - పూర్తిగా సరిచేసిన కోడ్ (Next/Prev బటన్ ఫిక్స్)
+// static/js/main.js - పూర్తి సరిచేసిన కోడ్ (గ్లోబల్ ఫంక్షన్ ఎక్స్‌పోజర్)
 // api.js నుండి ఫంక్షన్లను ఆలియాస్‌లతో ఇంపోర్ట్ చేయడం ద్వారా రికర్షన్ నివారిస్తుంది.
 import { 
   fetchNews as apiFetchNews, 
@@ -69,6 +69,7 @@ import {
     loadCommentsForCurrent();
   }
 
+  // ✅ గ్లోబల్ యాక్సెస్ కోసం ఈ ఫంక్షన్‌లను ఉంచుతాము
   function showNext(){
     if(newsList.length===0) return;
     idx = (idx + 1) % newsList.length;
@@ -79,7 +80,7 @@ import {
     idx = (idx - 1 + newsList.length) % newsList.length;
     renderCard();
   }
-
+  
   // ======= backend actions (MODIFIED to use api.js imports) =======
   async function loadNews(){
     try{
@@ -99,12 +100,11 @@ import {
       renderCard();
       log('info', `loaded ${newsList.length} news`);
 
-      // ✅ కొత్తగా జోడించిన కోడ్: 1 కంటే ఎక్కువ న్యూస్ ఉంటే బటన్స్ enable చెయ్యండి
+      // 1 కంటే ఎక్కువ న్యూస్ ఉంటే బటన్స్ enable చెయ్యండి
       if (newsList.length > 1) {
           prevBtn.disabled = false;
           nextBtn.disabled = false;
       }
-      
     }catch(err){
       log('error', 'loadNews error: ' + err.message);
       titleEl.textContent = "న్యూస్ లోడ్ తప్పియా";
@@ -192,6 +192,10 @@ import {
     if(e.key === 'ArrowLeft') showPrev();
   });
 
+  // ✅ గ్లోబల్ యాక్సెస్ కోసం ఫంక్షన్‌లను window ఆబ్జెక్ట్‌కు అటాచ్ చేయండి (swipe.js దీనిని ఉపయోగిస్తుంది)
+  window.showNext = showNext;
+  window.showPrev = showPrev;
+  
   // on load
   document.addEventListener('DOMContentLoaded', ()=>{
     loadNews();
