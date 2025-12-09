@@ -73,3 +73,18 @@
   console.info("swipe.js loaded: Calling window.showNext/showPrev");
 
 })();
+// ... (inside onTouchEnd function)
+    if (dy < 0) {
+      // finger moved up (swipe up) => Next
+      if (typeof window.showNext === "function") { // గ్లోబల్ ఫంక్షన్‌ను కాల్ చేస్తుంది
+        window.showNext();
+        e.preventDefault(); 
+      }
+    } else {
+      // finger moved down (swipe down) => Prev
+      if (typeof window.showPrev === "function") { // గ్లోబల్ ఫంక్షన్‌ను కాల్ చేస్తుంది
+        window.showPrev();
+        e.preventDefault(); 
+      }
+    }
+// ...
