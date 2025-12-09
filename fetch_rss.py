@@ -16,8 +16,9 @@ logger = logging.getLogger('shortnews')
 # RSS ఫీడ్ URLలు
 # ఈ లిస్ట్‌ను మీ ప్రాజెక్ట్ అవసరాలకు అనుగుణంగా మార్చండి
 RSS_FEEDS = [
-    "https://telugu.news18.com/commonfeeds/v1/tel/rss/andhra-pradesh.xml","https://telugu.news18.com/commonfeeds/v1/tel/rss/international.xml","
-    https://telugu.news18.com/commonfeeds/v1/tel/rss/national.xml",
+    "https://telugu.news18.com/commonfeeds/v1/tel/rss/andhra-pradesh.xml",
+    "https://telugu.news18.com/commonfeeds/v1/tel/rss/international.xml",
+    "https://telugu.news18.com/commonfeeds/v1/tel/rss/national.xml",
     "https://telugu.news18.com/commonfeeds/v1/tel/rss/telangana.xml",
     "https://www.teluguone.com/news/tonefeeds/latestnews/latestnews-25.rss",
 ]
