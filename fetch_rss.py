@@ -4,18 +4,6 @@ import time
 import subprocess
 from pymongo import MongoClient
 import feedparser
-# ~/project/fetch_rss.py లోని మార్పు (main() ఫంక్షన్ లోపల)
-
-# ... (డేటాబేస్ కనెక్షన్ లాజిక్ తర్వాత, ఫెచింగ్ ప్రారంభించే ముందు)
-try:
-    # న్యూస్ కలెక్షన్‌లోని అన్ని పాత డేటాను తొలగించడం
-    # ✅ దీనివల్ల మీరు మార్చిన కొత్త ఫీడ్‌లు మాత్రమే ఉంటాయి.
-    result = news_col.delete_many({})
-    print(f"INFO:shortnews:Deleted {result.deleted_count} old news items from database.")
-except Exception as e:
-    print(f"ERROR:shortnews:Failed to delete old news: {e}")
-
-# ... (ఇక్కడి నుండి RSS ఫీడ్‌లను ఫెచ్ చేసే మరియు సేవ్ చేసే మీ పాత లాజిక్ కొనసాగుతుంది)
 
 # ==============================================================================
 # 1. సెటప్ (Setup)
