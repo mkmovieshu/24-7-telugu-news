@@ -1,4 +1,4 @@
-# ~/project/app.py - పూర్తిగా సరిచేసిన కోడ్
+# ~/project/app.py - పూర్తి సరిచేసిన కోడ్
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,8 +10,8 @@ from bson import ObjectId
 import os
 from datetime import datetime
 import logging
-import subprocess
-import threading
+import subprocess # New: For running fetch_rss.py
+import threading # New: For non-blocking execution
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("shortnews")
@@ -30,12 +30,11 @@ templates = Jinja2Templates(directory="ui")
 # -----------------------
 
 # ✅ MONGO_URL ని MONGO_URI గా మార్చాము
-MONGO_URI = os.getenv("MONGO_URI") 
+MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
 
-# ✅ MONGO_URI ని తనిఖీ చేస్తాము
-if not MONGO_URI:
-    log.error("MONGO_URI environment variable not set") 
+if not MONGO_URI: # MONGO_URI ని తనిఖీ చేయండి
+    log.error("MONGO_URI environment variable not set")
     # WARNING: Not raising error here to allow local testing without env var
 
 # కనెక్షన్ కోసం MONGO_URI ని వాడుతున్నాం
@@ -67,7 +66,7 @@ def serialize_news(doc):
 
 def run_fetch_rss_script():
     """Runs the synchronous fetch_rss.py script in a separate process/thread."""
-    # ✅ MONGO_URI ని తనిఖీ చేస్తాము
+    # ✅ MONGO_URI ని తనిఖీ చేయండి
     if not MONGO_URI:
         log.warning("Skipping fetch: MONGO_URI not set.")
         return
@@ -109,7 +108,8 @@ async def list_news(limit: int = 100):
     """
     Return list of news items. ADDED CACHE CONTROL.
     """
-    cursor = news_col.find({}, sort=[("created_at", -1)]).limit(limit)
+    # ✅ తాజా వార్తల కోసం pub_date ఆధారంగా క్రమం మార్చాము
+    cursor = news_col.find({}, sort=[("pub_date", -1)]).limit(limit)
     items = [serialize_news(doc) async for doc in cursor]
     
     # FIXED: Cache-Control హెడర్‌ను జతచేయండి
@@ -196,4 +196,3 @@ async def shutdown():
     if client:
         client.close() # Close motor client
     log.info("App shutdown.")
-    
