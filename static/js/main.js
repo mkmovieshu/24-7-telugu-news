@@ -1,4 +1,4 @@
-// static/js/main.js - పూర్తి సరిచేసిన కోడ్
+// static/js/main.js - పూర్తిగా సరిచేసిన కోడ్ (Next/Prev బటన్ ఫిక్స్)
 // api.js నుండి ఫంక్షన్లను ఆలియాస్‌లతో ఇంపోర్ట్ చేయడం ద్వారా రికర్షన్ నివారిస్తుంది.
 import { 
   fetchNews as apiFetchNews, 
@@ -21,10 +21,6 @@ import {
   const linkEl = document.getElementById('news-link');
   const likesCountEl = document.getElementById('likesCount');
   const dislikesCountEl = document.getElementById('dislikesCount');
-  
-  // ✅ కొత్తగా జోడించినది: న్యూస్ తేదీ ఎలిమెంట్
-  const dateEl = document.getElementById('news-date'); 
-  
   const prevBtn = document.getElementById('prevBtn');
   const nextBtn = document.getElementById('nextBtn');
 
@@ -60,8 +56,6 @@ import {
       dislikesCountEl.textContent = "0";
       commentListEl.innerHTML = '';
       commentsCountEl.textContent = "0";
-      // తేదీ లేకపోతే ఖాళీగా ఉంచండి
-      if (dateEl) dateEl.textContent = ''; 
       return;
     }
     const item = newsList[idx];
@@ -70,33 +64,11 @@ import {
     linkEl.href = item.link || '#';
     likesCountEl.textContent = (item.likes||0);
     dislikesCountEl.textContent = (item.dislikes||0);
-    
-    // ✅ తేదీ/సమయాన్ని ఫార్మాట్ చేసి చూపించడం
-    if (dateEl && item.published) {
-        try {
-            const dateObj = new Date(item.published);
-            // 'te-IN' (తెలుగు - భారతదేశం) లో ఫార్మాట్ చేస్తుంది
-            dateEl.textContent = dateObj.toLocaleDateString('te-IN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZoneName: 'short' // ఉదా: IST
-            });
-        } catch (e) {
-            log('error', 'Date parsing failed for ' + item.id + ': ' + e.message);
-            dateEl.textContent = 'తేదీ అందుబాటులో లేదు';
-        }
-    } else if (dateEl) {
-        dateEl.textContent = 'తేదీ అందుబాటులో లేదు';
-    }
-
 
     // load comments for this news
     loadCommentsForCurrent();
   }
-  
+
   function showNext(){
     if(newsList.length===0) return;
     idx = (idx + 1) % newsList.length;
@@ -115,20 +87,24 @@ import {
       const data = await apiFetchNews(NEWS_LIMIT); 
       
       const items = data.items || [];
-      // 'published' ఫీల్డ్‌ను ఇక్కడ మ్యాప్ చేయాలి
       newsList = items.map(it=>({
         id: it.id || it._id || '',
         title: it.title || '',
         summary: it.summary || '',
         link: it.link || it.source || '',
-        // ✅ కొత్తగా జోడించిన 'published' ఫీల్డ్
-        published: it.published, 
         likes: Number(it.likes||0),
         dislikes: Number(it.dislikes||0)
       }));
       idx = 0;
       renderCard();
       log('info', `loaded ${newsList.length} news`);
+
+      // ✅ కొత్తగా జోడించిన కోడ్: 1 కంటే ఎక్కువ న్యూస్ ఉంటే బటన్స్ enable చెయ్యండి
+      if (newsList.length > 1) {
+          prevBtn.disabled = false;
+          nextBtn.disabled = false;
+      }
+      
     }catch(err){
       log('error', 'loadNews error: ' + err.message);
       titleEl.textContent = "న్యూస్ లోడ్ తప్పియా";
@@ -172,8 +148,7 @@ import {
       for(const c of items){
         const el = document.createElement('div');
         el.className = 'comment';
-        // కామెంట్ తేదీని తెలుగు ఫార్మాట్‌లో చూపిస్తుంది
-        el.textContent = c.text + '  ·  ' + (c.created_at ? new Date(c.created_at).toLocaleString('te-IN') : ''); 
+        el.textContent = c.text + '  ·  ' + (c.created_at ? new Date(c.created_at).toLocaleString() : '');
         commentListEl.appendChild(el);
       }
     }catch(err){
@@ -198,7 +173,6 @@ import {
       alert('కామెంట్ పంపడంలో లోపం: '+ (err.message||err));
     }
   }
-
 
   // ======= attach events =======
   prevBtn.addEventListener('click', showPrev);
