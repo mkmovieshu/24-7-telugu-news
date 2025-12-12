@@ -1,4 +1,4 @@
-fastapi==0.115.0
+Fastapi==0.115.0
 uvicorn[standard]==0.30.6
 gunicorn==21.2.0
 motor==3.7.1
@@ -8,4 +8,9 @@ feedparser==6.0.11
 httpx==0.27.2
 python-dotenv==1.0.1
 python-dateutil==2.9.0.post0
-# (groq, dnspython, pydantic etc add only if you need them)
+
+# 🚨 దీన్ని కొత్తగా చేర్చండి
+google-genai 
+
+# మీరు ఉపయోగించినట్లైతే, దీనిని కూడా చేర్చండి:
+# dnspython # MongoDB SRV కనెక్షన్ల కోసం (optional, but recommended)
