@@ -1,4 +1,4 @@
-// static/js/main.js - పూర్తి సరిచేసిన కోడ్ (గ్లోబల్ ఫంక్షన్ ఎక్స్‌పోజర్)
+// static/js/main.js - పూర్తి సరిచేసిన కోడ్ (తేదీ డిస్‌ప్లే, స్వైపింగ్ ఫిక్స్)
 // api.js నుండి ఫంక్షన్లను ఆలియాస్‌లతో ఇంపోర్ట్ చేయడం ద్వారా రికర్షన్ నివారిస్తుంది.
 import { 
   fetchNews as apiFetchNews, 
@@ -19,6 +19,8 @@ import {
   const titleEl = document.getElementById('news-title');
   const summaryEl = document.getElementById('news-summary');
   const linkEl = document.getElementById('news-link');
+  // ✅ కొత్తగా చేర్చబడింది: న్యూస్ తేదీ ఎలిమెంట్
+  const dateEl = document.getElementById('news-date'); 
   const likesCountEl = document.getElementById('likesCount');
   const dislikesCountEl = document.getElementById('dislikesCount');
   const prevBtn = document.getElementById('prevBtn');
@@ -35,164 +37,206 @@ import {
   toggleBtn.addEventListener('click', ()=> {
     logBox.style.display = logBox.style.display === 'block' ? 'none' : 'block';
   });
-  function log(type, msg){
-    try{
-      const d = document.createElement('div');
-      d.textContent = `[${type}] ${msg}`;
-      if(type==='error') d.style.color = '#ff8080';
-      logBox.appendChild(d);
-      logBox.scrollTop = logBox.scrollHeight;
-    }catch(e){}
-    if(type==='error') console.error(msg); else console.log(msg);
+
+  const logMessagesEl = document.getElementById('log-messages');
+  function log(level, message) {
+    console.log(`[${level.toUpperCase()}] ${message}`);
+    const li = document.createElement('li');
+    li.className = `log-${level}`;
+    li.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    logMessagesEl.prepend(li);
+    if (logMessagesEl.children.length > 50) {
+      logMessagesEl.removeChild(logMessagesEl.lastChild);
+    }
   }
 
-  // ======= UI renderers =======
-  function renderCard(){
-    if(!newsList || newsList.length===0){
-      titleEl.textContent = "టైటిల్ లేదు";
-      summaryEl.textContent = "న్యూస్ లోడ్ అవలేదో... అప్పుడు Refresh చెయ్యండి";
-      linkEl.href = "#";
-      likesCountEl.textContent = "0";
-      dislikesCountEl.textContent = "0";
-      commentListEl.innerHTML = '';
-      commentsCountEl.textContent = "0";
-      return;
-    }
-    const item = newsList[idx];
-    titleEl.textContent = item.title || 'ఉపశీర్షిక లేదు';
-    summaryEl.textContent = item.summary || '';
-    linkEl.href = item.link || '#';
-    likesCountEl.textContent = (item.likes||0);
-    dislikesCountEl.textContent = (item.dislikes||0);
+  // ======= Navigation =======
 
-    // load comments for this news
+  function showNews(idx) {
+    if (newsList.length === 0) return;
+
+    const item = newsList[idx];
+
+    titleEl.textContent = item.title;
+    summaryEl.textContent = item.summary || 'సారాంశం ఇంకా సిద్ధం కాలేదు.';
+    linkEl.href = item.link;
+
+    // ✅ మార్పు 2: తేదీ/సమయాన్ని ఫార్మాట్ చేసి చూపించడం
+    if (item.published) {
+        try {
+            const dateObj = new Date(item.published);
+            // 'te-IN' (తెలుగు - భారతదేశం) లో ఫార్మాట్ చేస్తుంది
+            dateEl.textContent = dateObj.toLocaleDateString('te-IN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZoneName: 'short' // ఉదా: IST
+            });
+        } catch (e) {
+            log('error', 'Date parsing failed for ' + item.id + ': ' + e.message);
+            dateEl.textContent = 'తేదీ అందుబాటులో లేదు';
+        }
+    } else {
+        dateEl.textContent = 'తేదీ అందుబాటులో లేదు';
+    }
+    
+    // లైక్స్/డిస్‌లైక్స్ అప్‌డేట్ చేయండి
+    likesCountEl.textContent = item.likes || 0;
+    dislikesCountEl.textContent = item.dislikes || 0;
+
+    // నావిగేషన్ బటన్లను అప్‌డేట్ చేయండి
+    prevBtn.disabled = idx === 0;
+    nextBtn.disabled = idx === newsList.length - 1;
+
+    // కామెంట్లు లోడ్ చేయండి
     loadCommentsForCurrent();
   }
 
-  // ✅ గ్లోబల్ యాక్సెస్ కోసం ఈ ఫంక్షన్‌లను ఉంచుతాము
-  function showNext(){
-    if(newsList.length===0) return;
-    idx = (idx + 1) % newsList.length;
-    renderCard();
-  }
-  function showPrev(){
-    if(newsList.length===0) return;
-    idx = (idx - 1 + newsList.length) % newsList.length;
-    renderCard();
-  }
-  
-  // ======= backend actions (MODIFIED to use api.js imports) =======
-  async function loadNews(){
-    try{
-      // *** apiFetchNews ను వాడుతున్నాం ***
-      const data = await apiFetchNews(NEWS_LIMIT); 
-      
-      const items = data.items || [];
-      newsList = items.map(it=>({
-        id: it.id || it._id || '',
-        title: it.title || '',
-        summary: it.summary || '',
-        link: it.link || it.source || '',
-        likes: Number(it.likes||0),
-        dislikes: Number(it.dislikes||0)
-      }));
-      idx = 0;
-      renderCard();
-      log('info', `loaded ${newsList.length} news`);
-
-      // 1 కంటే ఎక్కువ న్యూస్ ఉంటే బటన్స్ enable చెయ్యండి
-      if (newsList.length > 1) {
-          prevBtn.disabled = false;
-          nextBtn.disabled = false;
-      }
-    }catch(err){
-      log('error', 'loadNews error: ' + err.message);
-      titleEl.textContent = "న్యూస్ లోడ్ తప్పియా";
-      summaryEl.textContent = err.message || '';
+  function showNext() {
+    if (idx < newsList.length - 1) {
+      idx++;
+      showNews(idx);
+    } else {
+      log('info', 'చివరి వార్తకి చేరుకున్నారు.');
     }
   }
 
-  async function postReaction(action){
-    if(!newsList[idx] || !newsList[idx].id) { log('error','no news id'); return; }
-    const id = newsList[idx].id;
-    try{
-      // *** apiPostReaction ను వాడుతున్నాం ***
-      const res = await apiPostReaction(id, action);
-      
-      // update local
-      newsList[idx].likes = res.likes;
-      newsList[idx].dislikes = res.dislikes;
-      likesCountEl.textContent = newsList[idx].likes;
-      dislikesCountEl.textContent = newsList[idx].dislikes;
-    }catch(err){
-      log('error','postReaction error: ' + (err.message||err));
-      alert('Reaction తప్పిపోయింది: '+ (err.message||err)); 
+  function showPrev() {
+    if (idx > 0) {
+      idx--;
+      showNews(idx);
+    } else {
+      log('info', 'మొదటి వార్త వద్ద ఉన్నారు.');
     }
   }
 
-  async function loadCommentsForCurrent(){
-    commentListEl.innerHTML = '';
-    commentsCountEl.textContent = '0';
-    if(!newsList[idx] || !newsList[idx].id) return;
-    const id = newsList[idx].id;
-    try{
-      // *** apiFetchComments ను వాడుతున్నాం ***
-      const data = await apiFetchComments(id);
-      
-      const items = (data.items || []);
-      commentsCountEl.textContent = items.length;
-      if(items.length===0){
-        commentListEl.innerHTML = '<div class="sm">ఇక్కడ ఎటువంటి కామెంట్స్ లేవు</div>';
-        return;
-      }
-      for(const c of items){
-        const el = document.createElement('div');
-        el.className = 'comment';
-        el.textContent = c.text + '  ·  ' + (c.created_at ? new Date(c.created_at).toLocaleString() : '');
-        commentListEl.appendChild(el);
-      }
-    }catch(err){
-      log('error','loadComments error: '+err.message);
-      commentListEl.innerHTML = '<div class="sm">కామెంట్స్ లో లోప్</div>';
-    }
-  }
-
-  async function postComment(text){
-    if(!newsList[idx] || !newsList[idx].id) { alert('News id లేదు'); return; }
-    if(!text || !text.trim()){ alert('ఖాళీ కామెంట్ పంప్వద్దు'); return; }
-    const id = newsList[idx].id;
-    try{
-      // *** apiPostComment ను వాడుతున్నాం ***
-      const res = await apiPostComment(id, text);
-      
-      // add to local render immediately by reloading comments
-      commentInput.value = '';
-      await loadCommentsForCurrent();
-    }catch(err){
-      log('error','postComment error: '+err.message);
-      alert('కామెంట్ పంపడంలో లోపం: '+ (err.message||err));
-    }
-  }
-
-  // ======= attach events =======
   prevBtn.addEventListener('click', showPrev);
   nextBtn.addEventListener('click', showNext);
-  document.getElementById('likeBtn').addEventListener('click', ()=>postReaction('like'));
-  document.getElementById('dislikeBtn').addEventListener('click', ()=>postReaction('dislike'));
 
-  commentForm.addEventListener('submit', function(ev){
-    ev.preventDefault();
-    const txt = commentInput.value;
-    postComment(txt);
+  // ======= API Calls / Data Loading =======
+
+  async function loadNews() {
+    log('info', 'వార్తలను లోడ్ చేస్తున్నాము...');
+    try {
+      const data = await apiFetchNews(NEWS_LIMIT);
+      newsList = data.items;
+      if (newsList.length > 0) {
+        log('success', `${newsList.length} వార్తలు విజయవంతంగా లోడ్ చేయబడ్డాయి.`);
+        idx = 0; // మొదటి వార్త నుండి ప్రారంభించండి
+        showNews(idx);
+      } else {
+        log('warning', 'వార్తలు ఏవీ లోడ్ కాలేదు. ఫీడ్స్ లేదా డేటాబేస్‌ను తనిఖీ చేయండి.');
+        summaryEl.textContent = 'క్షమించండి, వార్తలు ఏవీ అందుబాటులో లేవు.';
+      }
+    } catch (e) {
+      log('error', 'వార్తలు లోడ్ చేయడంలో లోపం: ' + e.message);
+      summaryEl.textContent = 'వార్తలను లోడ్ చేయడంలో లోపం సంభవించింది.';
+    }
+  }
+
+  // ======= Reactions =======
+
+  async function handleReaction(type) {
+    if (newsList.length === 0) return;
+    const item = newsList[idx];
+    log('info', `స్పందన (${type}) పంపుతోంది...`);
+    try {
+      const data = await apiPostReaction(item.id, type);
+      // అప్‌డేట్ చేసిన లైక్స్/డిస్‌లైక్స్ కౌంట్‌ను అప్‌డేట్ చేయండి
+      item.likes = data.likes;
+      item.dislikes = data.dislikes;
+      likesCountEl.textContent = item.likes;
+      dislikesCountEl.textContent = item.dislikes;
+      log('success', `స్పందన విజయవంతమైంది. Likes: ${item.likes}, Dislikes: ${item.dislikes}`);
+    } catch (e) {
+      log('error', 'స్పందన పంపడంలో లోపం: ' + e.message);
+    }
+  }
+
+  document.getElementById('likeBtn').addEventListener('click', () => handleReaction('like'));
+  document.getElementById('dislikeBtn').addEventListener('click', () => handleReaction('dislike'));
+
+  // ======= Comments =======
+
+  async function loadCommentsForCurrent() {
+    if (newsList.length === 0) {
+        commentListEl.innerHTML = '';
+        commentsCountEl.textContent = '0';
+        return;
+    }
+    const newsId = newsList[idx].id;
+    log('info', 'కామెంట్లు లోడ్ చేస్తున్నాము...');
+    try {
+      const data = await apiFetchComments(newsId);
+      const items = data.items;
+      commentsCountEl.textContent = items.length;
+      commentListEl.innerHTML = ''; // కామెంట్ల జాబితాను శుభ్రం చేయండి
+
+      items.forEach(comment => {
+        const li = document.createElement('li');
+        li.className = 'comment-item';
+        // కామెంట్ తేదీ ఫార్మాటింగ్
+        let commentDate = 'సమయం లేదు';
+        try {
+            const dateObj = new Date(comment.created_at);
+            commentDate = dateObj.toLocaleDateString('te-IN', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch(e) {}
+        
+        li.innerHTML = `
+          <p class="comment-text">${comment.text}</p>
+          <span class="comment-date">${commentDate}</span>
+        `;
+        commentListEl.appendChild(li);
+      });
+      log('success', `${items.length} కామెంట్లు లోడ్ చేయబడ్డాయి.`);
+
+    } catch (e) {
+      log('error', 'కామెంట్లు లోడ్ చేయడంలో లోపం: ' + e.message);
+      commentListEl.innerHTML = '<li class="comment-item">కామెంట్లు లోడ్ చేయడంలో లోపం.</li>';
+    }
+  }
+
+  commentForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    if (newsList.length === 0) return;
+    const newsId = newsList[idx].id;
+    const text = commentInput.value.trim();
+
+    if (!text) {
+      log('warning', 'కామెంట్‌లో ఖాళీగా ఉంది.');
+      return;
+    }
+    
+    log('info', 'కామెంట్ పోస్ట్ చేస్తున్నాము...');
+
+    try {
+      await apiPostComment(newsId, text);
+      commentInput.value = ''; // ఫామ్‌ను శుభ్రం చేయండి
+      log('success', 'కామెంట్ విజయవంతంగా పోస్ట్ చేయబడింది.');
+      // అప్‌డేట్ అయిన కామెంట్‌ల కోసం మళ్లీ లోడ్ చేయండి
+      await loadCommentsForCurrent(); 
+    } catch (e) {
+      log('error', 'కామెంట్ పోస్ట్ చేయడంలో లోపం: ' + e.message);
+    }
   });
 
+
+  // ======= Init / Global Export =======
+  
   // enable left/right arrow keys
   window.addEventListener('keydown', function(e){
     if(e.key === 'ArrowRight') showNext();
     if(e.key === 'ArrowLeft') showPrev();
   });
 
-  // ✅ గ్లోబల్ యాక్సెస్ కోసం ఫంక్షన్‌లను window ఆబ్జెక్ట్‌కు అటాచ్ చేయండి (swipe.js దీనిని ఉపయోగిస్తుంది)
+  // ✅ మార్పు 3: స్వైపింగ్ కోసం గ్లోబల్ యాక్సెస్ (swipe.js దీనిని ఉపయోగిస్తుంది)
   window.showNext = showNext;
   window.showPrev = showPrev;
   
@@ -210,30 +254,3 @@ import {
   });
 
 })();
-// ... (last lines of main.js inside the function)
-  // ✅ గ్లోబల్ యాక్సెస్ కోసం ఫంక్షన్‌లను window ఆబ్జెక్ట్‌కు అటాచ్ చేయండి (swipe.js దీనిని ఉపయోగిస్తుంది)
-  window.showNext = showNext;
-  window.showPrev = showPrev;
-  
-  // on load
-  document.addEventListener('DOMContentLoaded', ()=>{
-    loadNews();
-  });
-// ...
-// ~/project/static/js/main.js - చివరి భాగం (నమూనా)
-
-  // enable left/right arrow keys
-  window.addEventListener('keydown', function(e){
-    if(e.key === 'ArrowRight') showNext();
-    if(e.key === 'ArrowLeft') showPrev();
-  });
-
-  // ✅ కొత్తగా చేర్చబడింది: స్వైపింగ్ కోసం గ్లోబల్ యాక్సెస్
-  window.showNext = showNext; 
-  window.showPrev = showPrev; 
-
-  // on load
-  document.addEventListener('DOMContentLoaded', ()=>{
-    loadNews();
-  });
-//... (మిగిలిన కోడ్)
