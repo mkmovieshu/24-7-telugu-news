@@ -220,3 +220,20 @@ import {
     loadNews();
   });
 // ...
+// ~/project/static/js/main.js - చివరి భాగం (నమూనా)
+
+  // enable left/right arrow keys
+  window.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight') showNext();
+    if(e.key === 'ArrowLeft') showPrev();
+  });
+
+  // ✅ కొత్తగా చేర్చబడింది: స్వైపింగ్ కోసం గ్లోబల్ యాక్సెస్
+  window.showNext = showNext; 
+  window.showPrev = showPrev; 
+
+  // on load
+  document.addEventListener('DOMContentLoaded', ()=>{
+    loadNews();
+  });
+//... (మిగిలిన కోడ్)
