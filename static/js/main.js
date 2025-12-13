@@ -5,7 +5,8 @@ import {
   postReaction as apiPostReaction, 
   fetchComments as apiFetchComments, 
   postComment as apiPostComment 
-} from './api.js'; 
+} from '/static/js/api.js'; // <--- రూట్ నుండి పూర్తి మార్గాన్ని ఉపయోగించండి
+// ... మిగిలిన కోడ్ ...
 
 (function(){
   // ======= config =======
