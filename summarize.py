@@ -1,35 +1,46 @@
+# summarize.py
 import os
-from google.generativeai import GenerativeModel
-import google.generativeai as genai
+from google import genai
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-MODEL_NAME = "models/gemini-2.5-flash"
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY is not set")
 
-def summarize_news(title: str, content: str):
-    # ❌ RULE 1: Very short title → NO AI
-    if len(title) < 40 or not content:
-        return content[:500], False
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+def summarize_news(title: str, content: str, max_chars: int = 500):
+    """
+    Returns (summary_text, ai_used: bool)
+    """
+
+    # 🔒 AI వాడకుండా నేరుగా content చిన్నదైతే
+    if content and len(content) <= max_chars:
+        return content.strip(), False
 
     prompt = f"""
-క్రింది న్యూస్‌ని తెలుగు లో
-అత్యవసర సమాచారం మాత్రమే ఉంచి
-గరిష్టంగా 5 వాక్యాలు
-500 అక్షరాలు దాటకుండా
-నిష్పక్షపాతంగా రాయండి.
+క్రింది న్యూస్‌ని తెలుగులో {max_chars} అక్షరాల లోపల స్పష్టంగా, వార్తలా సమరీ చెయ్యి.
+అవసరం లేని ఉపోద్ఘాతం వద్దు.
 
-న్యూస్:
+Title:
+{title}
+
+Content:
 {content}
 """
 
     try:
-        model = GenerativeModel(MODEL_NAME)
-        result = model.generate_content(prompt)
-        text = result.text.strip()
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
 
-        # 🔪 HARD CUT (NO TRUST ON AI)
-        return text[:500], True
+        text = response.text.strip()
+
+        # hard safety cut
+        return text[:max_chars], True
 
     except Exception as e:
-        # ❗ AI fail అయినా site పడకూడదు
-        return content[:500], False
+        # 🔥 AI fail అయితే RSS content fallback
+        fallback = content[:max_chars] if content else title
+        return fallback, False
