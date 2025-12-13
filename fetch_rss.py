@@ -1,176 +1,67 @@
-import os
-import logging
-import time
-from pymongo import MongoClient, ASCENDING
 import feedparser
-from datetime import datetime, timedelta, timezone
+import hashlib
+import logging
+import os
+from pymongo import MongoClient
+from datetime import datetime
+from summarize import summarize_news
 
-# 🚨 కొత్తగా చేర్చబడింది: Gemini API
-from google import genai 
-from google.genai.errors import APIError 
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("fetch_rss")
 
-# ==============================================================================
-# 1. సెటప్ (Setup)
-# ==============================================================================
+MONGO_URL = os.getenv("MONGO_URL")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
 
-# లాగింగ్ సెటప్
-logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
-logger = logging.getLogger('shortnews')
+client = MongoClient(MONGO_URL)
+db = client[MONGO_DB_NAME]
+news_col = db["news"]
 
-# RSS ఫీడ్ URLలు
 RSS_FEEDS = [
-    "https://telugu.news18.com/commonfeeds/v1/tel/rss/andhra-pradesh.xml",
-    "https://telugu.news18.com/commonfeeds/v1/tel/rss/international.xml",
-    "https://telugu.news18.com/commonfeeds/v1/tel/rss/national.xml",
-    "https://telugu.news18.com/commonfeeds/v1/tel/rss/telangana.xml",
-    "https://www.teluguone.com/news/tonefeeds/latestnews/latestnews-25.rss",
+    "https://telugu.hindustantimes.com/rss",
+    "https://www.andhrajyothy.com/rss",
+    "https://www.eenadu.net/rss"
 ]
 
-# MongoDB కనెక్షన్
-try:
-    MONGO_URI = os.getenv("MONGO_URI") 
-    MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews")
-    
-    if not MONGO_URI:
-        raise ValueError("MONGO_URI environment variable not found. Please set the MONGO_URI in your environment variables.")
-    
-    client = MongoClient(MONGO_URI)
-    db = client[MONGO_DB_NAME]
-    news_collection = db["news"]
-    logger.info("MongoDB కనెక్షన్ విజయవంతం.")
+def make_hash(title: str, source: str) -> str:
+    base = f"{source}|{title.strip().lower()}"
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
-except Exception as e:
-    logger.error(f"MongoDB కనెక్షన్ లోపం: {e}")
-    # కనెక్షన్ లోపం ఉంటే స్క్రిప్ట్‌ను ఆపివేయండి
-    exit(1) 
-
-# Gemini API సెటప్
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-if not GEMINI_API_KEY:
-    logger.warning("GEMINI_API_KEY environment variable not found. Summaries will be empty.")
-    gemini_client = None
-else:
-    # 🚨 Gemini క్లయింట్‌ను సెటప్ చేయండి
-    try:
-        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        logger.info("Gemini API క్లయింట్ సెటప్ చేయబడింది.")
-    except Exception as e:
-        logger.error(f"Gemini క్లయింట్ ప్రారంభించడంలో లోపం: {e}")
-        gemini_client = None
-
-
-# ==============================================================================
-# 2. ఫంక్షన్స్ (Functions)
-# ==============================================================================
-
-def generate_summary(text):
-    """Gemini API ని ఉపయోగించి తెలుగులో సారాంశాన్ని జనరేట్ చేస్తుంది."""
-    if not gemini_client:
-        return "సారాంశం జనరేటర్ అందుబాటులో లేదు."
-
-    # Gemini ప్రాంప్ట్
-    prompt = f"""
-    మీరు 24/7 తెలుగు షార్ట్ న్యూస్ ఛానెల్ కోసం పని చేసే AI అసిస్టెంట్‌గా వ్యవహరించండి.
-    కింద ఇచ్చిన వార్త యొక్క కంటెంట్‌ను (content) **తెలుగులో** 30 నుండి 50 పదాలలో చదివేందుకు సులభంగా ఉండే **సారాంశాన్ని (summary)** మాత్రమే జనరేట్ చేయండి.
-    
-    వార్త కంటెంట్:
-    ---
-    {text}
-    ---
-    """
-    
-    try:
-        response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash', # వేగవంతమైన, తక్కువ ఖర్చుతో కూడిన మోడల్
-            contents=prompt
-        )
-        return response.text.strip()
-    except APIError as e:
-        logger.error(f"Gemini API లోపం: {e}")
-        return "సారాంశం జనరేట్ చేయడంలో API లోపం సంభవించింది."
-    except Exception as e:
-        logger.error(f"సారాంశం జనరేట్ చేయడంలో ఊహించని లోపం: {e}")
-        return "సారాంశం జనరేట్ చేయడంలో లోపం."
-
-def fetch_and_store():
-    """RSS ఫీడ్‌లను ఫెచ్ చేసి, సారాంశాలను జనరేట్ చేసి, డేటాబేస్‌లో సేవ్ చేస్తుంది."""
-    logger.info("RSS ఫీడ్ ఫెచింగ్ ప్రారంభమైంది.")
-    
-    # 🚨 ముఖ్యమైన మార్పు 1: ప్రతిసారి పాత వార్తలను పూర్తిగా తొలగించండి
-    # దీని వలన మీరు మునుపటి సమస్యను పరిష్కరించారు.
-    try:
-        news_collection.delete_many({})
-        logger.info("డేటాబేస్ నుండి పాత వార్తలు విజయవంతంగా తొలగించబడ్డాయి.")
-    except Exception as e:
-        logger.error(f"పాత వార్తలను తొలగించడంలో లోపం: {e}")
-
-    # 🚨 ముఖ్యమైన మార్పు 2: 12 గంటల తర్వాత ఆటో-డిలీట్ కోసం TTL ఇండెక్స్‌ను సెట్ చేయండి
-    try:
-        # expireAfterSeconds=43200 (12 గంటలు = 12 * 60 * 60 సెకన్లు)
-        news_collection.create_index(
-            [("created_at", ASCENDING)], 
-            expireAfterSeconds=43200, 
-            background=True
-        )
-        logger.info("TTL ఇండెక్స్ (12 గంటలు) విజయవంతంగా సెట్ చేయబడింది.")
-    except Exception as e:
-        logger.error(f"TTL ఇండెక్స్ సెట్ చేయడంలో లోపం: {e}")
-
-
+def fetch():
     for feed_url in RSS_FEEDS:
-        try:
-            feed = feedparser.parse(feed_url)
-            
-            for entry in feed.entries:
-                # తేదీని పార్స్ చేయండి
-                published_date = datetime.utcnow() # డిఫాల్ట్: ఇప్పుడు
-                if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                    published_date = datetime.fromtimestamp(
-                        time.mktime(entry.published_parsed), 
-                        tz=timezone.utc
-                    ).replace(tzinfo=None)
+        feed = feedparser.parse(feed_url)
 
-                # 🚨 ముఖ్యమైన మార్పు 3: Gemini API ని ఉపయోగించి సారాంశాన్ని జనరేట్ చేయండి
-                full_text = getattr(entry, 'description', getattr(entry, 'summary', entry.title))
-                
-                # సారాంశాన్ని జనరేట్ చేయండి
-                summary_text = generate_summary(full_text)
+        for entry in feed.entries:
+            title = entry.get("title", "").strip()
+            link = entry.get("link", "").strip()
+            source = feed.feed.get("title", "unknown")
 
-                news_item = {
-                    "title": entry.title,
-                    "summary": summary_text, # ✅ ఇక్కడ సారాంశం జత చేయబడింది
-                    "link": entry.link,
-                    "source": feed_url,
-                    "published": published_date, 
-                    "created_at": datetime.utcnow(), # TTL కోసం ఈ ఫీల్డ్ అవసరం
-                    "likes": 0,
-                    "dislikes": 0
-                }
-                
-                # డూప్లికేట్‌లను నివారించడానికి
-                # (మేము ఇప్పటికే కలెక్షన్‌ను క్లీన్ చేసాము, కాబట్టి ఈ డూప్లికేట్ చెక్ ఇక్కడ అనవసరం, కానీ ఉండటం మంచిది)
-                try:
-                    news_collection.insert_one(news_item)
-                    logger.info(f"కొత్త న్యూస్ ఇన్సర్ట్ చేయబడింది: {entry.title[:50]}...")
-                    
-                except Exception as e:
-                    if "duplicate key error" in str(e):
-                        logger.debug(f"న్యూస్ ఇప్పటికే ఉంది, స్కిప్ చేయబడింది: {entry.title[:50]}...")
-                    else:
-                        logger.error(f"డేటాబేస్ లోపం: {e}")
-                        
-            logger.info(f"Successfully fetched and processed feed: {feed_url}")
+            if not title or not link:
+                continue
 
-        except Exception as e:
-            logger.error(f"Error fetching/processing feed {feed_url}: {e}")
+            h = make_hash(title, source)
 
-    logger.info("RSS ఫీడ్ ఫెచింగ్ పూర్తయింది.")
+            # 🔒 HARD STOP: DUPLICATE
+            if news_col.find_one({"hash": h}):
+                log.info("SKIP (cached): %s", title)
+                continue
 
-# ==============================================================================
-# 3. స్క్రిప్ట్ ఎగ్జిక్యూషన్
-# ==============================================================================
+            content = entry.get("summary", "") or entry.get("description", "")
+
+            # 🧠 AI only if really needed
+            summary, ai_used = summarize_news(title, content)
+
+            doc = {
+                "title": title,
+                "summary": summary,
+                "source": source,
+                "link": link,
+                "hash": h,
+                "ai_used": ai_used,
+                "created_at": datetime.utcnow()
+            }
+
+            news_col.insert_one(doc)
+            log.info("INSERTED: %s | AI=%s", title, ai_used)
 
 if __name__ == "__main__":
-    fetch_and_store()
-    
+    fetch()
