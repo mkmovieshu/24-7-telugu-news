@@ -2,34 +2,20 @@ import feedparser
 import hashlib
 import logging
 import os
-from pymongo import MongoClient, errors as mongo_errors # MongoDB లోపం కోసం
+from pymongo import errors as mongo_errors # MongoDB లోపం కోసం
 from datetime import datetime
 from summarize import summarize_news
+
+# Import DB connection and collection from db.py
+from db import news_collection as news_col, client, DB_NAME
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
 log = logging.getLogger("fetch_rss")
 
-MONGO_URL = os.getenv("MONGO_URL")
-# ✅ తప్పనిసరి: డేటాబేస్ పేరును డిఫాల్ట్‌గా సెట్ చేయండి లేదా ఎన్విరాన్‌మెంట్ వేరియబుల్ నుండి తీసుకోండి
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "shortnews") 
-
-if not MONGO_URL:
-    log.error("MONGO_URL environment variable is not set. Exiting.")
-    exit(1)
-    
 try:
-    client = MongoClient(MONGO_URL)
     # కనెక్షన్‌ను తనిఖీ చేయడానికి ఒక చిన్న ఆపరేషన్ చేయండి
     client.admin.command('ping') 
-    db = client[MONGO_DB_NAME]
-    news_col = db["news"]
-    log.info("MongoDB కనెక్షన్ విజయవంతం: DB='%s'", MONGO_DB_NAME)
-
-    # 12 గంటల తర్వాత ఆటో-డిలీట్ కోసం TTL ఇండెక్స్‌ను సెట్ చేయండి (చేర్చితే మంచిది)
-    try:
-        news_col.create_index("created_at", expireAfterSeconds=43200, background=True)
-    except Exception:
-        pass
+    log.info("MongoDB కనెక్షన్ విజయవంతం: DB='%s'", DB_NAME)
 
 except mongo_errors.ConnectionFailure as e:
     log.error("MongoDB కనెక్షన్ లోపం: %s", e)
