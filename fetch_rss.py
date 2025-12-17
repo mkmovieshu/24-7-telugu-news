@@ -25,9 +25,11 @@ try:
     news_col = db["news"]
     log.info("MongoDB కనెక్షన్ విజయవంతం: DB='%s'", MONGO_DB_NAME)
 
-    # 12 గంటల తర్వాత ఆటో-డిలీట్ కోసం TTL ఇండెక్స్‌ను సెట్ చేయండి (చేర్చితే మంచిది)
+    # 24 గంటల తర్వాత ఆటో-డిలీట్ కోసం TTL ఇండెక్స్‌ను సెట్ చేయండి (చేర్చితే మంచిది)
     try:
-        news_col.create_index("created_at", expireAfterSeconds=43200, background=True)
+        # Use centralized TTL setting
+        from config import NEWS_TTL_SECONDS
+        news_col.create_index("created_at", expireAfterSeconds=NEWS_TTL_SECONDS, background=True)
     except Exception:
         pass
 
