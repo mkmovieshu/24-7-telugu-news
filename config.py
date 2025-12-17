@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     MONGO_URL: str
     MONGO_DB_NAME: str
     ADMIN_SECRET: str
+    SECRET_FETCHER_PATH: str = "/secret-fetcher-endpoint-3453456"
     
     # ✅ Gemini API Key ను ఉపయోగించండి
     GOOGLE_API_KEY: str | None = None  
@@ -44,6 +45,7 @@ settings = get_settings()
 MONGO_URL = settings.MONGO_URL
 MONGO_DB_NAME = settings.MONGO_DB_NAME
 ADMIN_SECRET = settings.ADMIN_SECRET
+SECRET_FETCHER_PATH = settings.SECRET_FETCHER_PATH
 GOOGLE_API_KEY = settings.GOOGLE_API_KEY # ఇది Gemini API Key గా పనిచేస్తుంది
 RSS_FEEDS = settings.RSS_FEEDS
 
