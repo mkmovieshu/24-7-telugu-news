@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     MAX_ITEMS_PER_FEED: int = 3   
     MAX_ITEMS_PER_RUN: int = 30   
 
+    # Database
+    NEWS_TTL_SECONDS: int = 86400 # 24 Hours
+
     # Logging
     LOG_LEVEL: str = "INFO"
 
@@ -54,6 +57,7 @@ USE_GROQ = settings.USE_GROQ # ఇది ఇప్పుడు False
 
 MAX_ITEMS_PER_FEED = settings.MAX_ITEMS_PER_FEED
 MAX_ITEMS_PER_RUN = settings.MAX_ITEMS_PER_RUN
+NEWS_TTL_SECONDS = settings.NEWS_TTL_SECONDS
 
 LOG_LEVEL = settings.LOG_LEVEL.upper()
 

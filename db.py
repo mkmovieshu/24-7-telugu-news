@@ -22,7 +22,9 @@ comments_collection = db.get_collection("comments")
 
 # ensure TTL is set (24 hours) — created_at must be datetime
 try:
-    news_collection.create_index("created_at", expireAfterSeconds=86400)
+    # Use 24-hour TTL from config or default to 86400
+    from config import NEWS_TTL_SECONDS
+    news_collection.create_index("created_at", expireAfterSeconds=NEWS_TTL_SECONDS)
 except Exception:
     pass
     
