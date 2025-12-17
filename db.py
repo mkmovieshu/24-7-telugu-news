@@ -20,9 +20,11 @@ news_collection = db.get_collection("news")
 likes_collection = db.get_collection("likes")
 comments_collection = db.get_collection("comments")
 
-# ensure TTL is set (24 hours) — created_at must be datetime
+# ensure TTL is set (12 hours) — created_at must be datetime
 try:
-    news_collection.create_index("created_at", expireAfterSeconds=86400)
-except Exception:
-    pass
+    news_collection.create_index("created_at", expireAfterSeconds=43200, background=True)
+except Exception as e:
+    # Index creation might fail if it already exists with different options.
+    # In a real production setup, we might want to log this or handle migration.
+    print(f"Warning: Could not create TTL index: {e}")
     
