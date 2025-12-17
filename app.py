@@ -13,6 +13,8 @@ import logging
 import subprocess # New: For running fetch_rss.py
 import threading # New: For non-blocking execution
 
+from config import SECRET_FETCHER_PATH
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("shortnews")
 
@@ -85,11 +87,11 @@ def run_fetch_rss_script():
     except Exception as e:
         log.error(f"Error running fetch_rss.py: {e}")
 
-@app.get("/secret-fetcher-endpoint-3453456", status_code=202)
+@app.get(SECRET_FETCHER_PATH, status_code=202)
 async def trigger_fetch():
     """
     Triggers the fetch_rss.py script in a background thread to avoid blocking the main web server.
-    NOTE: Use a long, hard-to-guess URL for security.
+    NOTE: Use a long, hard-to-guess URL for security. This path is configurable via SECRET_FETCHER_PATH env var.
     """
     threading.Thread(target=run_fetch_rss_script).start()
     log.info("Fetch triggered by external source.")
